@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router';
-import { api, STATIC_DEMO } from '../api/client.js';
+import { api } from '../api/client.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import Avatar from '../components/Avatar.jsx';
 import { RoleBadge } from '../components/Badges.jsx';
@@ -10,6 +10,7 @@ import PostList from '../components/PostList.jsx';
 import Sheet from '../components/Sheet.jsx';
 import { ReportSheet } from '../components/ReportButton.jsx';
 import UserName, { VerifiedBadge } from '../components/VerifiedBadge.jsx';
+import { useInstall } from '../lib/installPrompt.js';
 import { GOAL_LABELS, academicLine, firstName, isProfileComplete } from '../lib/profile.js';
 
 /** A tappable row in a settings sheet. */
@@ -65,6 +66,8 @@ export default function Profile() {
   const [requests, setRequests] = useState(0);
   const [tab, setTab] = useState('about');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [iosHelp, setIosHelp] = useState(false);
+  const { mode: installMode, install } = useInstall();
   const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
@@ -275,15 +278,16 @@ export default function Profile() {
               <SheetRow to="/network" icon={<Icon name="people" size={20} />} label="Connections and requests" count={requests} />
               <SheetRow to="/communities?tab=mine" icon={<Icon name="communities" size={20} />} label="My communities" />
               {hasRole('admin') && <SheetRow to="/admin" icon={<Icon name="shield" size={20} />} label="Admin dashboard" hint="Users, reports, moderation and statistics" />}
-              {STATIC_DEMO && (
+              {installMode && (
                 <SheetRow
                   onClick={async () => {
-                    if (!window.confirm('Reset the demo? Your posts, messages and changes in this browser will be cleared.')) return;
-                    (await import('../demo/core.js')).resetDemo();
+                    setMenuOpen(false);
+                    if (installMode === 'prompt') await install();
+                    else setIosHelp(true);
                   }}
-                  icon={<Icon name="sparkles" size={20} />}
-                  label="Reset demo data"
-                  hint="Start again from the original demo"
+                  icon={<Icon name="download" size={20} />}
+                  label="Install the app"
+                  hint="Open SunuCampus from your home screen"
                 />
               )}
               <SheetRow onClick={logout} icon={<Icon name="logout" size={20} />} label="Log out" danger />
@@ -301,6 +305,28 @@ export default function Profile() {
             />
           )}
         </div>
+      </Sheet>
+      <Sheet open={iosHelp} onClose={() => setIosHelp(false)} title="Install SunuCampus">
+        <ol className="install-steps">
+          <li>
+            <span className="install-step-icon">
+              <Icon name="share" size={20} />
+            </span>
+            Tap <strong>Share</strong> in Safari’s toolbar
+          </li>
+          <li>
+            <span className="install-step-icon">
+              <Icon name="plus" size={20} />
+            </span>
+            Choose <strong>Add to Home Screen</strong>
+          </li>
+          <li>
+            <span className="install-step-icon">
+              <img src="/icon-192.png" alt="" width={28} height={28} />
+            </span>
+            Open SunuCampus from your home screen
+          </li>
+        </ol>
       </Sheet>
       {!isSelf && <ReportSheet open={reporting} onClose={() => setReporting(false)} targetType="user" targetId={user.id} />}
     </main>

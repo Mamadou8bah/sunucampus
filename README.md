@@ -118,8 +118,16 @@ npm run build:demo        # outputs frontend/dist
 
 In this build every request goes to an in-browser copy of the API (`frontend/src/demo`): logins, profiles,
 matching, posts, communities, messaging (demo students reply), the marketplace, notifications and the full
-admin dashboard. Each visitor's changes are saved in their own browser; **Profile → Settings → Reset demo
-data** starts over. The login screen offers a demo student and the admin dashboard.
+admin dashboard. Each visitor's changes are saved in their own browser. Sign in with any demo student
+(for example `haddy.darboe10@demo.sunucampus.local` / `Password123`), the admin (`admin@sunucampus.local` /
+`ChangeMe123`), or register a new account.
+
+### Installing the app (PWA)
+
+Production builds include a service worker (`frontend/pwa/`, written to `dist/sw.js` at build time) and a full
+web app manifest, so SunuCampus can be installed from the browser and opens offline. **Profile → Settings →
+Install the app** shows the browser's install prompt, or the Add to Home Screen steps on iPhone. API calls and
+the realtime connection are never cached.
 
 - Host settings: base directory `frontend`, build command `npm run build:demo`, publish directory `dist`
   (`frontend/netlify.toml` and `frontend/vercel.json` already say this, including the rewrite every page needs).

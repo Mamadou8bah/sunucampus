@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { io } from 'socket.io-client';
-import { api, tokenStore, STATIC_DEMO } from '../api/client.js';
+import { api, tokenStore } from '../api/client.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 
 const SocketContext = createContext({
@@ -47,7 +47,7 @@ export function SocketProvider({ children }) {
       setSocket(s);
       attach(s);
     };
-    if (STATIC_DEMO) import('../demo/index.js').then(({ createDemoSocket }) => setup(createDemoSocket()));
+    if (import.meta.env.VITE_STATIC_DEMO === 'true') import('../demo/index.js').then(({ createDemoSocket }) => setup(createDemoSocket()));
     else setup(io({ auth: { token: tokenStore.get() }, transports: ['websocket'] }));
 
     function attach(s) {

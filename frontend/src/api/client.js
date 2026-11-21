@@ -2,7 +2,8 @@ const TOKEN_KEY = 'sunucampus.token';
 
 // Frontend-only demo: requests go to an in-browser copy of the API (src/demo) instead of a server.
 export const STATIC_DEMO = import.meta.env.VITE_STATIC_DEMO === 'true';
-const demoApi = () => import('../demo/index.js');
+// Written with the env check inline so normal builds drop the demo code and data entirely.
+const demoApi = () => (import.meta.env.VITE_STATIC_DEMO === 'true' ? import('../demo/index.js') : Promise.reject(new Error('Demo API not built')));
 
 /** Sends a request to the in-browser demo API and returns a Response-like { ok, status, data }. */
 async function demoRequest(method, path, { query, body, formData } = {}) {
@@ -60,7 +61,7 @@ export async function apiDownload(path, query = {}) {
   if (STATIC_DEMO) {
     const r = await demoRequest('GET', path, { query });
     if (!r.ok) throw new ApiError(r.status, r.data?.error?.message ?? 'Download failed');
-    const { downloadText } = await import('../demo/core.js');
+    const { downloadText } = await demoApi();
     downloadText(r.data.filename, r.data.content, r.data.type);
     return;
   }

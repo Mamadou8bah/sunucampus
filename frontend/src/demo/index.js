@@ -5,5 +5,5 @@ import './routes/social.js';
 import './routes/messaging.js';
 import './routes/admin.js';
 
-export { handle, resetDemo } from './core.js';
+export { handle, resetDemo, downloadText } from './core.js';
 export { createDemoSocket } from './socket.js';

@@ -6524,18 +6524,6 @@ div.nt-row {
   }
 }
 
-/* Demo builds: one-tap demo login */
-.demo-login {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  margin-top: 1.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--line);
-  color: var(--ink-3);
-  font-size: 0.9rem;
-}
 .thread-intro-item {
   margin: 0.6rem 0 0 !important;
   color: var(--ink-3);
@@ -6544,4 +6532,85 @@ div.nt-row {
 .thread-intro-item strong {
   color: var(--ink);
   font-weight: 650;
+}
+
+/* Intro photos fade in over the coloured placeholder once loaded */
+.intro-face {
+  animation: intro-face-in 0.35s ease-out both;
+}
+@keyframes intro-face-in {
+  from {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .intro-face {
+    animation: none;
+  }
+}
+
+/* Matches: swipe hint on the card that fades away */
+.deck-hint {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  z-index: 5;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0;
+  padding: 0.5rem 0.9rem;
+  border-radius: var(--r-pill);
+  background: rgba(18, 12, 15, 0.72);
+  backdrop-filter: blur(10px);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+.deck-hint.is-hidden {
+  opacity: 0;
+  transform: translate(-50%, -6px);
+}
+.deck-meta {
+  padding-top: 0.25rem;
+}
+@media (prefers-reduced-motion: reduce) {
+  .deck-hint {
+    transition: none;
+  }
+}
+
+/* Install steps for iPhone (Safari has no install prompt) */
+.install-steps {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  counter-reset: step;
+}
+.install-steps li {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.install-step-icon {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: var(--mist);
+  color: var(--ink);
+}
+.install-step-icon img {
+  border-radius: 7px;
 }

@@ -1,14 +1,33 @@
 {
+  "id": "/",
   "name": "SunuCampus",
   "short_name": "SunuCampus",
   "description": "Meet, connect and collaborate with students at The University of The Gambia.",
+  "lang": "en",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
   "background_color": "#120c0f",
   "theme_color": "#120c0f",
+  "categories": ["social", "education"],
   "icons": [
     { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Messages", "url": "/messages", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Matches", "url": "/matches", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Marketplace", "url": "/market", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] },
+    { "name": "New post", "url": "/?compose=1", "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }] }
+  ],
+  "screenshots": [
+    { "src": "/screenshots/home.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Your campus feed" },
+    { "src": "/screenshots/matches.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Smart matches with students like you" },
+    { "src": "/screenshots/messages.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Message your connections" },
+    { "src": "/screenshots/marketplace.png", "sizes": "390x844", "type": "image/png", "form_factor": "narrow", "label": "Buy and sell on campus" },
+    { "src": "/screenshots/desktop.png", "sizes": "1440x900", "type": "image/png", "form_factor": "wide", "label": "SunuCampus on a computer" }
   ]
 }

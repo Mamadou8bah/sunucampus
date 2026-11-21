@@ -5,6 +5,38 @@ import Icon from '../components/Icon.jsx';
 
 export const INTRO_SEEN_KEY = 'sunucampus.introSeen';
 
+/*
+ * Intro photos start downloading as soon as this module loads (the files are small), and each
+ * one is drawn only after it has loaded, so there's never a broken-image icon.
+ */
+const FACE_URLS = ['/intro/face-1.jpg', '/intro/face-2.jpg', '/intro/face-3.jpg', '/intro/face-4.jpg', '/intro/face-5.jpg', '/intro/face-6.jpg', '/intro/face-3-card.jpg', '/intro/face-4-card.jpg'];
+const loadedFaces = new Set();
+const faceWaiters = new Map(); // url -> Set(callback)
+if (typeof window !== 'undefined') {
+  for (const url of FACE_URLS) {
+    const img = new Image();
+    img.decoding = 'async';
+    img.onload = () => {
+      loadedFaces.add(url);
+      faceWaiters.get(url)?.forEach((fn) => fn());
+    };
+    img.src = url;
+  }
+}
+
+/** Returns the URL once that photo has loaded (immediately if it already has), else null. */
+function useFaceUrl(url) {
+  const [ready, setReady] = useState(() => loadedFaces.has(url));
+  useEffect(() => {
+    if (loadedFaces.has(url)) return setReady(true);
+    const done = () => setReady(true);
+    if (!faceWaiters.has(url)) faceWaiters.set(url, new Set());
+    faceWaiters.get(url).add(done);
+    return () => faceWaiters.get(url)?.delete(done);
+  }, [url]);
+  return ready ? url : null;
+}
+
 /* Illustrations drawn in the brand palette sampled from the SunuCampus mark. */
 function PeopleArt() {
   const people = [
@@ -15,17 +47,7 @@ function PeopleArt() {
     [205, 205, 26, '#cc2280', 'MS'],
     [52, 200, 24, '#f080b5', 'IN'],
   ];
-  // Demo faces come from `npm run photos:fetch`. Only draw them once they really load;
-  // otherwise browsers show a broken-image icon instead of the initials.
-  const [faces, setFaces] = useState({});
-  useEffect(() => {
-    people.forEach((_, n) => {
-      const img = new Image();
-      img.onload = () => setFaces((f) => ({ ...f, [n]: img.src }));
-      img.src = `/intro/face-${n + 1}.jpg`;
-    });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const faces = [0, 1, 2, 3, 4, 5].map((n) => useFaceUrl(FACE_URLS[n])); // eslint-disable-line react-hooks/rules-of-hooks
 
   return (
     <svg viewBox="0 0 300 260" className="intro-art" aria-hidden="true">
@@ -53,6 +75,7 @@ function PeopleArt() {
               height={r * 2}
               preserveAspectRatio="xMidYMid slice"
               clipPath={`url(#face-clip-${n})`}
+              className="intro-face"
             />
           )}
         </g>
@@ -61,21 +84,11 @@ function PeopleArt() {
   );
 }
 
-/** Loads an intro face if it exists; returns null while missing so a colour block shows instead. */
-function useFace(n) {
-  const [src, setSrc] = useState(null);
-  useEffect(() => {
-    const img = new Image();
-    img.onload = () => setSrc(img.src);
-    img.src = `/intro/face-${n}.jpg`;
-  }, [n]);
-  return src;
-}
 
 /** A small stack of match cards, like the real Matches screen. */
 function MatchArt() {
-  const back = useFace(3);
-  const front = useFace(4);
+  const back = useFaceUrl('/intro/face-3-card.jpg');
+  const front = useFaceUrl('/intro/face-4-card.jpg');
   return (
     <div className="intro-match" aria-hidden="true">
       <div className="intro-card intro-card-back" style={back ? { backgroundImage: `url(${back})` } : undefined} />
@@ -101,7 +114,7 @@ function MatchArt() {
 
 /** The same scene as before (chat, a like, communities) but with real content. */
 function CampusArt() {
-  const face = useFace(1);
+  const face = useFaceUrl('/intro/face-1.jpg');
   return (
     <div className="intro-campus" aria-hidden="true">
       <div className="intro-msg intro-msg-in">

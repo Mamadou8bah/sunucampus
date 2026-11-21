@@ -14,6 +14,7 @@ import { useOptions } from '../lib/useOptions.js';
 import { clearRecent, readRecent, saveRecent } from '../lib/recentSearches.js';
 
 const SWIPE_THRESHOLD = 110;
+const SWIPE_HINT_KEY = 'sunucampus.swipeHintSeen';
 const PASSED_KEY = 'sunucampus.passed';
 
 const readPassed = () => {
@@ -186,6 +187,13 @@ function Deck() {
   const [leaving, setLeaving] = useState(null);
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
+  // "Swipe right to connect…" shows on the card for a few seconds until the first swipe.
+  const [hint, setHint] = useState(() => !localStorage.getItem(SWIPE_HINT_KEY));
+  useEffect(() => {
+    if (!hint) return undefined;
+    const t = setTimeout(() => setHint(false), 4000);
+    return () => clearTimeout(t);
+  }, [hint]);
 
   useEffect(() => {
     api('/matches', { query: { limit: 30 } })
@@ -201,6 +209,8 @@ function Deck() {
   async function decide(action) {
     if (!current || leaving) return;
     setError('');
+    if (hint) setHint(false);
+    localStorage.setItem(SWIPE_HINT_KEY, '1');
     if (action === 'connect') {
       try {
         await api('/connections', { method: 'POST', body: { recipientId: current.user.id, source: 'match' } });
@@ -276,6 +286,9 @@ function Deck() {
     <>
       <div className="deck">
         <MatchCard key={current.user.id} match={current} onSwipe={decide} leaving={leaving} />
+        <p className={`deck-hint ${hint ? '' : 'is-hidden'}`} aria-hidden={!hint}>
+          <Icon name="back" size={16} strokeWidth={2.4} /> Swipe right to connect, left to pass <Icon name="forward" size={16} strokeWidth={2.4} />
+        </p>
       </div>
       <div className="deck-actions">
         <button type="button" className="deck-button deck-pass" onClick={() => decide('pass')} aria-label={`Pass on ${current.user.name}`}>
@@ -295,7 +308,7 @@ function Deck() {
       </div>
       <div aria-live="polite">
         {error && <p className="field-error" style={{ textAlign: 'center' }}>{error}</p>}
-        <p className="deck-meta">{notice || `${index + 1} of ${data.matches.length}. Swipe right to connect, left to pass.`}</p>
+        {notice && <p className="deck-meta">{notice}</p>}
       </div>
     </>
   );

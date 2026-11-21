@@ -37,6 +37,7 @@ const PATHS = {
   close: <path d="M6 6l12 12M18 6 6 18" />,
   check: <path d="M5 12.5l4.5 4.5L19 7.5" />,
   send: <path d="M4 12 20 4l-4 16-4-6.5zM12 13.5 20 4" />,
+  download: <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" />,
   share: <path d="M12 3.5v11.5M7.5 8 12 3.5 16.5 8M5.5 12.5v6a1.5 1.5 0 0 0 1.5 1.5h10a1.5 1.5 0 0 0 1.5-1.5v-6" />,
   flag: <path d="M5.5 21V4.5m0 0h11l-2 4 2 4h-11" />,
   more: (

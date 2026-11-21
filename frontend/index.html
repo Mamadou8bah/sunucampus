@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="description" content="SunuCampus: meet, connect and collaborate with students at The University of The Gambia." />
+    <meta name="theme-color" content="#120c0f" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="SunuCampus" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icon-192.png" type="image/png" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="preload" href="/brand/sunucampus-mark.png" as="image" />
+    <title>SunuCampus</title>
+    <!-- Splash styles inline, so the launch screen paints before the app's CSS and JS load. -->
+    <style>
+      .splash {
+        position: fixed;
+        inset: 0;
+        z-index: 100;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.4rem;
+        background: radial-gradient(60% 45% at 50% 42%, #3d0f27 0%, #120c0f 70%);
+        color: #fff;
+        font-family: 'Manrope Variable', Manrope, system-ui, sans-serif;
+      }
+      .splash-mark {
+        width: 132px;
+        height: 132px;
+        filter: drop-shadow(0 18px 40px rgba(240, 87, 187, 0.45));
+        animation: splash-in 700ms cubic-bezier(0.2, 0.9, 0.3, 1.2) both;
+      }
+      .splash-word {
+        margin: 1rem 0 0;
+        font-size: 2rem;
+        font-weight: 800;
+        letter-spacing: -0.03em;
+        animation: splash-fade 600ms 150ms both;
+      }
+      .splash-word span {
+        color: #f080b5;
+      }
+      .splash-tag {
+        margin: 0;
+        font-size: 0.9rem;
+        color: rgba(255, 255, 255, 0.6);
+        animation: splash-fade 600ms 250ms both;
+      }
+      @keyframes splash-in {
+        from {
+          transform: scale(0.7) rotate(-8deg);
+          opacity: 0;
+        }
+      }
+      @keyframes splash-fade {
+        from {
+          opacity: 0;
+          transform: translateY(6px);
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .splash * {
+          animation: none !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <div class="splash" role="status" aria-label="Loading SunuCampus">
+        <img src="/brand/sunucampus-mark.png" alt="" class="splash-mark" width="132" height="132" />
+        <p class="splash-word">Sunu<span>Campus</span></p>
+        <p class="splash-tag">The University of The Gambia</p>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

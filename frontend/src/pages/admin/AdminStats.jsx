@@ -222,6 +222,7 @@ export default function AdminStats() {
               <StatTile label="Acceptance rate" value={data.connections.acceptanceRate} suffix="%" hint="Of answered requests" />
               <StatTile label="Connections per student" value={data.connections.averageConnectionsPerUser} hint="Average, all time" />
               <StatTile label="From smart matching" value={data.connections.fromMatchingRate} suffix="%" hint="Of requests sent" />
+              <StatTile label="Accepted smart-match requests" value={data.connections.acceptedFromMatching} />
             </div>
             <div className="chart-grid">
               <ChartCard
@@ -257,6 +258,13 @@ export default function AdminStats() {
               </ChartCard>
               <ChartCard title="Most active communities" subtitle="Posts in this range">
                 <BarList items={data.communities.mostActive.map((c) => ({ label: c.name, value: c.posts }))} />
+              </ChartCard>
+              <ChartCard
+                title="Fastest-growing communities"
+                subtitle="Net membership gains in this range"
+                table={<DataTable columns={['Community', 'Net members']} rows={data.communities.fastestGrowing.map((c) => [c.name, c.netMembers])} />}
+              >
+                <BarList items={data.communities.fastestGrowing.map((c) => ({ label: c.name, value: c.netMembers }))} empty="No recorded membership gains in this range." />
               </ChartCard>
               <ChartCard title="Active communities by category">
                 <BarList items={toItems(data.communities.byCategory, CATEGORY_LABELS)} empty="No active communities yet." />

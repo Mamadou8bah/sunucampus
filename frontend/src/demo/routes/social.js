@@ -30,6 +30,7 @@ import {
   isCommunityModerator,
   notify,
   pairKeyOf,
+  recordAudit,
   relationFor,
 } from '../shared.js';
 
@@ -59,7 +60,7 @@ const createPostSchema = z.object({
 const feedQuery = z.object({
   community: objectId.optional(),
   author: objectId.optional(),
-  scope: z.enum(['foryou', 'campus']).optional(),
+  scope: z.enum(['foryou', 'friends', 'campus']).optional(),
   ...page,
 });
 const createCommentSchema = z.object({
@@ -222,7 +223,7 @@ const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Community.toJSON (no members list) plus the viewer's flags. */
 export function serializeCommunity(community, viewer) {
-  const { members: _members, ...rest } = docJSON(community);
+  const { members: _members, membershipChanges: _changes, ...rest } = docJSON(community);
   return {
     ...rest,
     isMember: isCommunityMember(community, viewer._id),
@@ -310,11 +311,21 @@ function updateCommunity(ctx) {
   return { community: serializeCommunity(community, ctx.me) };
 }
 
+function membershipChanges(community, delta) {
+  const day = nowISO().slice(0, 10);
+  const changes = community.membershipChanges ?? {};
+  return { ...changes, [day]: (changes[day] ?? 0) + delta };
+}
+
 function joinCommunity({ me, params }) {
   const community = loadCommunity(params.id, me);
   if (community.status !== 'active') throw badRequest('This community is not open for new members');
   if (!isCommunityMember(community, me._id)) {
-    update(community, { members: [...(community.members ?? []), me._id], memberCount: (community.memberCount ?? 0) + 1 });
+    update(community, {
+      members: [...(community.members ?? []), me._id],
+      memberCount: (community.memberCount ?? 0) + 1,
+      membershipChanges: membershipChanges(community, 1),
+    });
   }
   return { community: serializeCommunity(community, me) };
 }
@@ -330,9 +341,26 @@ function leaveCommunity({ me, params }) {
       members: community.members.filter((m) => !sameId(m, me._id)),
       moderators: moderators.filter((m) => !sameId(m, me._id)),
       memberCount: (community.memberCount ?? 0) - 1,
+      membershipChanges: membershipChanges(community, -1),
     });
   }
   return { community: serializeCommunity(community, me) };
+}
+
+function removeMember(ctx) {
+  const community = loadModeratable(ctx);
+  const { userId } = ctx.params;
+  if (!isObjectId(userId)) throw badRequest('Invalid member id');
+  if (isCommunityModerator(community, userId)) throw badRequest('Remove their moderator role first');
+  if (isCommunityMember(community, userId)) {
+    update(community, {
+      members: community.members.filter((id) => !sameId(id, userId)),
+      memberCount: community.memberCount - 1,
+      membershipChanges: membershipChanges(community, -1),
+    });
+    if (isAdmin(ctx.me)) recordAudit(ctx.me, 'community.member_removed', 'Community', community._id, { userId, name: community.name });
+  }
+  return { community: serializeCommunity(community, ctx.me) };
 }
 
 function communityMembers({ me, params }) {
@@ -462,6 +490,11 @@ function feed({ me, query }) {
     // A profile, or "Campus": campus-wide posts and posts in publicly readable communities.
     const readable = readableIds();
     match = (p) => !p.community || readable.has(String(p.community));
+  } else if (scope === 'friends') {
+    const readable = readableIds();
+    const people = new Set([me._id, ...connectedUserIds(me._id)].map(String));
+    const active = new Set(db.users.filter((user) => user.status === 'active').map((user) => String(user._id)));
+    match = (p) => people.has(String(p.author)) && active.has(String(p.author)) && (!p.community || readable.has(String(p.community)));
   } else if (scope === 'foryou') {
     // "For you": posts from my connections and me, plus posts in my communities.
     const mine = myIds();
@@ -578,6 +611,7 @@ register([
   ['POST', '/communities/:id/join', joinCommunity],
   ['POST', '/communities/:id/leave', leaveCommunity],
   ['GET', '/communities/:id/members', communityMembers],
+  ['DELETE', '/communities/:id/members/:userId', removeMember],
   ['POST', '/communities/:id/moderators', addModerator],
   ['DELETE', '/communities/:id/moderators/:userId', removeModerator],
 

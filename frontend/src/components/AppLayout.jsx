@@ -1,4 +1,5 @@
-import { Link, NavLink, Outlet, useLocation, useNavigate } from 'react-router';
+import { useLayoutEffect, useRef } from 'react';
+import { Link, NavLink, Outlet, useLocation, useNavigate, useNavigationType } from 'react-router';
 import { useAuth } from '../auth/AuthContext.jsx';
 import { useSocket } from '../realtime/SocketContext.jsx';
 import { useMediaQuery } from '../lib/useMediaQuery.js';
@@ -33,7 +34,32 @@ export default function AppLayout() {
   const counts = { unread, notif: notifUnread };
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const navigationType = useNavigationType();
+  const main = useRef(null);
+  const previousPath = useRef(pathname);
+  const pageAnimation = useRef(null);
   const desktop = useMediaQuery('(min-width: 1180px)');
+
+  useLayoutEffect(() => {
+    if (previousPath.current === pathname) return;
+    previousPath.current = pathname;
+    pageAnimation.current?.cancel();
+    pageAnimation.current = null;
+
+    if (navigationType !== 'POP') window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    if (
+      window.matchMedia('(prefers-reduced-motion: reduce)').matches
+      || document.activeElement?.matches(':focus-visible')
+    ) return;
+
+    // Soften the content swap without moving the layout or animating the shell.
+    pageAnimation.current = main.current?.animate?.(
+      [{ opacity: 0.9 }, { opacity: 1 }],
+      { duration: 140, easing: 'ease-out' },
+    );
+  }, [pathname, navigationType]);
+
+  useLayoutEffect(() => () => pageAnimation.current?.cancel(), []);
 
   const immersive = IMMERSIVE.some((r) => r.test(pathname));
   const wide = pathname.startsWith('/admin') || pathname.startsWith('/messages');
@@ -72,7 +98,7 @@ export default function AppLayout() {
           </span>
         </Link>
       </nav>
-      <div className="app-main">
+      <div className="app-main" ref={main}>
         <Outlet />
       </div>
       {showRail && <RightRail />}

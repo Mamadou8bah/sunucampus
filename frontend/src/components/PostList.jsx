@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api/client.js';
 import PostCard from './PostCard.jsx';
 
@@ -12,11 +12,13 @@ export default function PostList({ query = {}, prepend, emptyText = 'No posts ye
   const [totalPages, setTotalPages] = useState(1);
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState('');
+  const snapshot = useRef();
   const key = JSON.stringify(query);
 
   const load = useCallback(
     async (nextPage) => {
-      const data = await api('/posts', { query: { ...JSON.parse(key), page: nextPage, limit: 15 } });
+      const data = await api('/posts', { query: { ...JSON.parse(key), page: nextPage, limit: 15, snapshot: nextPage > 1 ? snapshot.current : undefined } });
+      snapshot.current = data.snapshot;
       setTotalPages(data.totalPages);
       setPage(nextPage);
       return data.posts;
@@ -27,6 +29,7 @@ export default function PostList({ query = {}, prepend, emptyText = 'No posts ye
   useEffect(() => {
     setPosts(null);
     setError('');
+    snapshot.current = undefined;
     load(1)
       .then(setPosts)
       .catch((err) => setError(err.message));
@@ -43,7 +46,13 @@ export default function PostList({ query = {}, prepend, emptyText = 'No posts ye
       // Skip duplicates that shift between pages when new posts arrive.
       setPosts((p) => [...p, ...more.filter((m) => !p.some((x) => x.id === m.id))]);
     } catch (err) {
-      setError(err.message);
+      if (err.status === 409) {
+        try {
+          setPosts(await load(1));
+        } catch (refreshError) {
+          setError(refreshError.message);
+        }
+      } else setError(err.message);
     } finally {
       setLoadingMore(false);
     }
@@ -57,7 +66,7 @@ export default function PostList({ query = {}, prepend, emptyText = 'No posts ye
     );
   }
   if (!posts) return <p className="muted" style={{ padding: '0 1rem' }}>Loading posts…</p>;
-  if (posts.length === 0) {
+  if (posts.length === 0 && page >= totalPages) {
     return (
       <p className="empty" style={{ margin: '0 1rem' }}>
         {emptyText}
@@ -67,11 +76,13 @@ export default function PostList({ query = {}, prepend, emptyText = 'No posts ye
 
   return (
     <div className="post-list">
+      {error && <p className="field-error" role="alert">{error}</p>}
       {posts.map((p) => (
         <PostCard
           key={p.id}
           post={p}
           showCommunity={showCommunity}
+          canDismiss={query.rank === 'relevant' || query.rank === 'trending'}
           onRemoved={(removed) => setPosts((list) => list.filter((x) => x.id !== removed.id))}
         />
       ))}

@@ -18,24 +18,41 @@ import Select from '../components/Select.jsx';
 function Members({ community, onChange }) {
   const [members, setMembers] = useState(null);
   const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const load = useCallback(() => {
-    api(`/communities/${community.id}/members`)
+    return api(`/communities/${community.id}/members`)
       .then((d) => setMembers(d.members))
       .catch((err) => setError(err.message));
   }, [community.id]);
 
-  useEffect(load, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function setModerator(member, makeModerator) {
+    setBusy(true);
     setError('');
     try {
       if (makeModerator) await api(`/communities/${community.id}/moderators`, { method: 'POST', body: { userId: member.id } });
       else await api(`/communities/${community.id}/moderators/${member.id}`, { method: 'DELETE' });
-      load();
-      onChange();
+      await Promise.all([load(), onChange()]);
     } catch (err) {
       setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMember(member) {
+    if (!window.confirm(`Remove ${member.name} from ${community.name}?`)) return;
+    setBusy(true);
+    setError('');
+    try {
+      await api(`/communities/${community.id}/members/${member.id}`, { method: 'DELETE' });
+      await Promise.all([load(), onChange()]);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -58,9 +75,14 @@ function Members({ community, onChange }) {
             </div>
             {community.canModerate && (
               <div className="person-row-actions">
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setModerator(m, !m.isModerator)}>
+                <button type="button" className="btn btn-ghost btn-sm" disabled={busy} onClick={() => setModerator(m, !m.isModerator)}>
                   {m.isModerator ? 'Remove moderator' : 'Make moderator'}
                 </button>
+                {!m.isModerator && (
+                  <button type="button" className="btn btn-danger-quiet btn-sm" disabled={busy} onClick={() => removeMember(m)}>
+                    Remove member
+                  </button>
+                )}
               </div>
             )}
           </li>
@@ -153,12 +175,12 @@ export default function Community() {
   const [newPost, setNewPost] = useState(null);
 
   const load = useCallback(() => {
-    api(`/communities/${slug}`)
+    return api(`/communities/${slug}`)
       .then((d) => setCommunity(d.community))
       .catch((err) => setError(err.status === 404 ? 'This community doesn’t exist or isn’t available.' : err.message));
   }, [slug]);
 
-  useEffect(load, [load]);
+  useEffect(() => { load(); }, [load]);
 
   async function toggleMembership() {
     setBusy(true);

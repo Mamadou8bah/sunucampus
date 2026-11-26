@@ -27,7 +27,11 @@ export function createApp() {
 
   app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
   // Uploaded profile photos. Names are random-ish and never reused, so they can be cached for a long time.
-  app.use('/uploads', express.static(UPLOADS_DIR, { maxAge: '30d', immutable: true }));
+  app.use('/uploads', express.static(UPLOADS_DIR, {
+    maxAge: '30d',
+    immutable: true,
+    setHeaders: (res) => res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin'),
+  }));
   app.use('/api/auth', authRoutes);
   app.use('/api/users', usersRouter);
   app.use('/api/matches', matchesRouter);
@@ -46,10 +50,20 @@ export function createApp() {
   // platform runs on one address (used for demos and simple deployments).
   const clientDir = join(BACKEND_ROOT, '..', 'frontend', 'dist');
   if (process.env.SERVE_CLIENT === 'true' && existsSync(clientDir)) {
-    app.use(express.static(clientDir, { index: false, maxAge: '1h' }));
     app.use('/assets', express.static(join(clientDir, 'assets'), { maxAge: '1y', immutable: true }));
+    app.use(express.static(clientDir, {
+      index: false,
+      maxAge: '1h',
+      setHeaders: (res, path) => {
+        if (path === join(clientDir, 'sw.js') || path === join(clientDir, 'index.html')) {
+          res.setHeader('Cache-Control', 'no-cache');
+        }
+      },
+    }));
     // Any other non-API page loads the app, which handles the route itself.
-    app.get(/^\/(?!api\/|uploads\/|socket\.io\/).*/, (_req, res) => res.sendFile(join(clientDir, 'index.html')));
+    app.get(/^\/(?!api\/|uploads\/|socket\.io\/).*/, (_req, res) => {
+      res.set('Cache-Control', 'no-cache').sendFile(join(clientDir, 'index.html'));
+    });
   }
 
   app.use(notFound);

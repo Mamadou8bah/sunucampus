@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
-import { api } from '../api/client.js';
+import { api, STATIC_DEMO } from '../api/client.js';
 import { useAuth } from '../auth/AuthContext.jsx';
 import AppBar from '../components/AppBar.jsx';
 import Avatar from '../components/Avatar.jsx';
@@ -15,8 +15,8 @@ import { firstName, isProfileComplete } from '../lib/profile.js';
 function PeopleStrip() {
   const [matches, setMatches] = useState(null);
   useEffect(() => {
-    api('/matches', { query: { limit: 10 } })
-      .then((d) => setMatches(d.matches))
+    api(STATIC_DEMO ? '/matches' : '/matches/people', { query: { limit: 10 } })
+      .then((d) => setMatches(d.recommendations ?? d.matches))
       .catch(() => setMatches([]));
   }, []);
 
@@ -24,15 +24,15 @@ function PeopleStrip() {
   return (
     <section aria-labelledby="people-title">
       <div className="section-head">
-        <h2 id="people-title">People you might click with</h2>
-        <Link to="/matches">See all</Link>
+        <h2 id="people-title">{STATIC_DEMO ? 'People you might click with' : 'People you may know'}</h2>
+        <Link to={STATIC_DEMO ? '/matches' : '/matches?tab=people'}>See all</Link>
       </div>
       <div className="people-strip">
         {matches.map((m) => (
-          <Link key={m.user.id} to={`/people/${m.user.id}`} state={{ source: 'match' }} className="person-bubble">
+          <Link key={m.user.id} to={`/people/${m.user.id}`} state={{ source: STATIC_DEMO ? 'match' : 'discover' }} className="person-bubble">
             <span className="person-bubble-ring" style={{ '--score': m.score }}>
               <Avatar user={m.user} size={62} />
-              <span className="person-bubble-score">{m.score}%</span>
+              {STATIC_DEMO && <span className="person-bubble-score">{m.score}%</span>}
             </span>
             <span className="person-bubble-name">{firstName(m.user.name)}</span>
           </Link>
@@ -63,6 +63,7 @@ export default function Home() {
   const { user, hasRole } = useAuth();
   const complete = isProfileComplete(user);
   const [scope, setScope] = useState('foryou');
+  const [headerHidden, setHeaderHidden] = useState(false);
   const { unread, notifUnread } = useSocket();
   const [composing, setComposing] = useState(false);
   const [params, setParams] = useSearchParams();
@@ -76,10 +77,30 @@ export default function Home() {
   }, [params, setParams]);
   const [newPost, setNewPost] = useState(null);
 
+  useEffect(() => {
+    let anchor = Math.max(0, window.scrollY);
+    let hidden = false;
+    function updateHeader() {
+      const top = Math.max(0, window.scrollY);
+      const change = top - anchor;
+      const next = top <= 8 || change <= -4 ? false : change >= 10 ? true : hidden;
+      if (next !== hidden) {
+        hidden = next;
+        anchor = top;
+        setHeaderHidden(hidden);
+      } else if (top <= 8 || (hidden ? change > 0 : change < 0)) {
+        anchor = top;
+      }
+    }
+    window.addEventListener('scroll', updateHeader, { passive: true });
+    return () => window.removeEventListener('scroll', updateHeader);
+  }, []);
+
   return (
     <>
       <AppBar
         large
+        className={headerHidden ? 'home-appbar is-hidden' : 'home-appbar'}
         title={
           <>
             <span className="only-mobile">
@@ -123,7 +144,7 @@ export default function Home() {
             </Link>
           </section>
         )}
-        {complete && <PeopleStrip />}
+        {(!STATIC_DEMO || complete) && <PeopleStrip />}
       </div>
 
       <div className="feed-tabs">
@@ -133,19 +154,19 @@ export default function Home() {
           onChange={setScope}
           options={[
             ['foryou', 'For you'],
-            ['campus', 'Campus'],
+            ['friends', 'Friends'],
           ]}
         />
       </div>
 
       <PostList
         key={scope}
-        query={{ scope }}
+        query={scope === 'foryou' ? (STATIC_DEMO ? { scope: 'campus' } : { scope, rank: 'relevant' }) : { scope }}
         prepend={newPost}
         emptyText={
           scope === 'foryou'
-            ? 'Posts from your connections and communities appear here. Connect with a few people or join a community, or switch to Campus to see everything.'
-            : 'Nothing on campus yet. Be the first to post.'
+            ? 'No posts yet. Connect with other students or join a community to see more.'
+            : 'Posts from you and your friends will appear here.'
         }
       />
 

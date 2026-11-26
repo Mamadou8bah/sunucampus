@@ -5032,6 +5032,14 @@ button.group-row:hover {
   .pf-bar {
     position: relative;
   }
+  .appbar.home-appbar {
+    position: sticky;
+    transition: transform 150ms ease-out;
+  }
+  .home-appbar.is-hidden:not(:focus-within) {
+    transform: translateY(-100%);
+    pointer-events: none;
+  }
   .pf-tabs {
     position: static;
   }

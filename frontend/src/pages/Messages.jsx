@@ -9,13 +9,12 @@ import Sheet from '../components/Sheet.jsx';
 import { ReportSheet } from '../components/ReportButton.jsx';
 import UserName from '../components/VerifiedBadge.jsx';
 import { academicLine, firstName } from '../lib/profile.js';
-import { chatTime, clock, dayLabel, fullDate, sameDay } from '../lib/time.js';
+import { chatTime, clock, dayLabel, fullDate } from '../lib/time.js';
 import { useMediaQuery } from '../lib/useMediaQuery.js';
 import { formatPrice } from '../lib/market.js';
+import { groupMessages } from '../lib/messages.js';
 
 export { MessageButton } from '../components/ConnectButton.jsx';
-
-const GROUP_GAP_MS = 5 * 60 * 1000;
 
 /** Avatar with a green dot when the student is online. */
 function PresenceAvatar({ user, size, online }) {
@@ -198,26 +197,6 @@ function NewMessageSheet({ open, onClose, connections, online, onPick }) {
 }
 
 /* ================================ Chat thread ================================ */
-
-/** Splits messages into days, and each day into runs from the same sender close in time. */
-function groupMessages(messages) {
-  const days = [];
-  for (const m of messages) {
-    let day = days[days.length - 1];
-    if (!day || !sameDay(day.date, m.createdAt)) {
-      day = { date: m.createdAt, groups: [] };
-      days.push(day);
-    }
-    const group = day.groups[day.groups.length - 1];
-    const last = group?.messages[group.messages.length - 1];
-    if (group && group.sender === m.sender && new Date(m.createdAt) - new Date(last.createdAt) < GROUP_GAP_MS) {
-      group.messages.push(m);
-    } else {
-      day.groups.push({ sender: m.sender, messages: [m] });
-    }
-  }
-  return days;
-}
 
 function Thread({ conversationId }) {
   const { user } = useAuth();

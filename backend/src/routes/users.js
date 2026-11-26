@@ -17,6 +17,7 @@ usersRouter.get('/:id', users.getUser);
 
 export const matchesRouter = Router();
 matchesRouter.get('/', authenticate, validate(matchesQuery, 'query'), users.matches);
+matchesRouter.get('/people', authenticate, validate(matchesQuery, 'query'), users.peopleYouMayKnow);
 
 export const metaRouter = Router();
 metaRouter.get('/options', authenticate, options);

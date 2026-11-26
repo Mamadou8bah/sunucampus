@@ -23,6 +23,8 @@ const optionalText = (max) =>
 export const updateProfileSchema = z
   .object({
     name: z.string().trim().min(2, 'Name must be at least 2 characters').max(80).optional(),
+    discoverable: z.boolean().optional(),
+    rankingExcludedUsers: z.array(z.string().regex(/^[a-f\d]{24}$/i)).max(200).optional(),
     programme: optionalText(120),
     yearOfStudy: z.coerce.number().int().min(1).max(7).nullable().optional(),
     bio: optionalText(500),

@@ -56,6 +56,7 @@ export function reportTables(report) {
       ['Acceptance rate (%)', c.acceptanceRate],
       ['Average connections per user', c.averageConnectionsPerUser],
       ['Requests from smart matching (%)', c.fromMatchingRate],
+      ['Accepted smart-match requests', c.acceptedFromMatching],
     ]);
     add('Connections: by source', ['Source', 'Requests'], mapRows(c.bySource));
     add('Connections: requests over time', ['Period starting', 'Requests'], c.series.map((r) => [r.date, r.count]));
@@ -64,6 +65,7 @@ export function reportTables(report) {
     add('Communities: by status', ['Status', 'Communities'], mapRows(cm.byStatus));
     add('Communities: active by category', ['Category', 'Communities'], mapRows(cm.byCategory));
     add('Communities: largest', ['Community', 'Members'], cm.largest.map((r) => [r.name, r.members]));
+    add('Communities: fastest growing in range', ['Community', 'Net members'], cm.fastestGrowing.map((r) => [r.name, r.netMembers]));
     add('Communities: most active in range', ['Community', 'Posts'], cm.mostActive.map((r) => [r.name, r.posts]));
   }
   if (m) {

@@ -1,3 +1,4 @@
+import { lazy } from 'react';
 import { Navigate, Route, Routes } from 'react-router';
 import { RequireAuth, GuestOnly } from './auth/RequireAuth.jsx';
 import AppLayout from './components/AppLayout.jsx';
@@ -27,8 +28,9 @@ import AdminUsers from './pages/admin/AdminUsers.jsx';
 import AdminReports from './pages/admin/AdminReports.jsx';
 import AdminPosts from './pages/admin/AdminPosts.jsx';
 import AdminCommunities from './pages/admin/AdminCommunities.jsx';
-import AdminStats from './pages/admin/AdminStats.jsx';
 import AdminAuditLog from './pages/admin/AdminAuditLog.jsx';
+
+const AdminStats = lazy(() => import('./pages/admin/AdminStats.jsx'));
 
 export default function App() {
   return (

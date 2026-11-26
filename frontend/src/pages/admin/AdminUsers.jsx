@@ -60,6 +60,22 @@ export default function AdminUsers() {
     }
   }
 
+  async function verify(target) {
+    if (!window.confirm(`Mark ${target.name} as a verified UTG student? Confirm their enrollment before continuing.`)) return;
+    setBusyId(target.id);
+    setError('');
+    setNotice('');
+    try {
+      await api(`/admin/users/${target.id}/verify`, { method: 'POST' });
+      setNotice(`${target.name} is now verified.`);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusyId(null);
+    }
+  }
+
   return (
     <>
       <div className="page-header">
@@ -158,6 +174,11 @@ export default function AdminUsers() {
                       {u.role !== 'admin' && u.status === 'active' && (
                         <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setWarning(u)}>
                           Warn
+                        </button>
+                      )}
+                      {u.role !== 'admin' && !u.isVerified && (
+                        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => verify(u)}>
+                          Verify student
                         </button>
                       )}
                       {u.status === 'active' ? (

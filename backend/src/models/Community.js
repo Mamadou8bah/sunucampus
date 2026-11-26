@@ -29,6 +29,8 @@ export const slugify = (name) =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 60);
 
+export const membershipDay = () => new Date().toISOString().slice(0, 10);
+
 const communitySchema = new mongoose.Schema(
   {
     name: { type: String, required: true, trim: true, maxlength: 60 },
@@ -39,6 +41,7 @@ const communitySchema = new mongoose.Schema(
     moderators: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     members: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     memberCount: { type: Number, default: 0 },
+    membershipChanges: { type: mongoose.Schema.Types.Mixed, select: false },
     status: { type: String, enum: Object.values(COMMUNITY_STATUS), default: COMMUNITY_STATUS.PENDING, index: true },
     statusReason: { type: String, trim: true, maxlength: 500 },
     reviewedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
@@ -64,6 +67,7 @@ communitySchema.set('toJSON', {
     delete ret._id;
     delete ret.__v;
     delete ret.members; // can be large; use memberCount and the members endpoint
+    delete ret.membershipChanges;
     return ret;
   },
 });

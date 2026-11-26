@@ -71,6 +71,20 @@ describe('GET /api/admin/users', () => {
   });
 });
 
+it('allows only admins to verify student accounts and audits a repeat request once', async () => {
+  const admin = await createUser({ role: 'admin' });
+  const student = await createUser();
+  const path = `/api/admin/users/${student.user.id}/verify`;
+  assert.equal((await api().post(path).set(bearer(student.token))).status, 403);
+  const results = await Promise.all([1, 2].map(() => api().post(path).set(bearer(admin.token))));
+  for (const res of results) {
+    assert.equal(res.status, 200);
+    assert.equal(res.body.user.isVerified, true);
+    assert.equal(res.body.user.email, student.user.email);
+  }
+  assert.equal(await AuditLog.countDocuments({ action: 'user.verified', actor: admin.user.id, targetId: student.user.id }), 1);
+});
+
 describe('PATCH /api/admin/users/:id/role and /status', () => {
   it('changes a role and writes an audit log', async () => {
     const { user: admin, token } = await createUser({ role: 'admin' });

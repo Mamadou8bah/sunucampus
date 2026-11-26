@@ -11,19 +11,22 @@ A smart campus social and networking platform for students of The University of 
 The interface is designed as a **mobile app first**: bottom tab bar, swipeable match cards, bottom sheets and
 full-screen chats. It can be installed to a phone's home screen, and on a desktop it switches to a side rail.
 
+The [Expo / React Native app](mobile-app/README.md) connects to the same backend for Android and iOS.
+
 ## Features
 
 | Area | What it does |
 |---|---|
 | Accounts and roles | Registration, login with JWT, password change. Three roles (student, moderator, admin) enforced on every request. |
 | Onboarding | A three-screen intro on first launch, then a five-step setup after sign-up (verify email, study, goals, interests, prompt) and a finish screen. |
-| Verified students | Students confirm a UTG email (`@utg.edu.gm`) with a 6-digit code and get a blue tick next to their name everywhere. |
+| Verified students | Students earn a blue tick by confirming a UTG email (`@utg.edu.gm`) with a 6-digit code or through manual verification by an administrator. |
 | Profiles | Programme, year, bio, photo, interests, skills, connection goals and up to three conversation prompts. |
 | Smart matching | Weighted compatibility score with plain-language reasons ("Shared interests: football, music"). |
 | Discovery | Search and filter students by programme, year, interest, skill and goal. |
 | Connections | Send, accept, decline, cancel and remove connection requests. |
-| Campus feed | Posts, likes and comments, plus posts from your communities. |
-| Communities | Create (admin approval required), join, leave, post, pin, and moderate with community moderators. |
+| Campus feed | Personalized For you ranking plus a chronological Friends feed for accepted connections. |
+| People you may know | Graph and profile recommendations with reasons, including for new accounts. |
+| Communities | Create (admin approval required), join, leave, post, and pin. Community moderators can appoint moderators and remove members. |
 | Messaging | Real-time private messages between connections, with typing indicators, read receipts and unread badges. |
 | Marketplace | Students list items and services with up to 4 photos, a price in dalasi, category, condition and pickup spot. Buyers browse, filter and message the seller directly (no connection needed for a listing). |
 | Search | One search for people, communities and posts, with recent searches and trending interests. |
@@ -66,7 +69,7 @@ docs/                proposal and documentation
 
 ## Running locally
 
-Requires Node.js 20.6 or newer.
+Requires Node.js 20.19+ on the 20.x line or Node.js 22.12+.
 
 ### 1. Backend
 
@@ -134,7 +137,23 @@ the realtime connection are never cached.
 - To refresh the built-in data after changing the database: `cd backend && npm run demo:export`
   (writes `frontend/src/demo/snapshot.json` and copies the photos to `frontend/public/uploads`).
 
-### Sharing a demo link
+### Deploying the full web app
+
+Use a Node.js 22.12+ host that supports long-running HTTP processes and WebSockets. Build from the repository root:
+
+```bash
+npm ci --prefix frontend
+npm run build --prefix frontend
+npm ci --prefix backend --omit=dev
+```
+
+Set `NODE_ENV=production`, `SERVE_CLIENT=true`, `USE_MEMORY_DB=false`, `MONGO_URI` to your persistent MongoDB connection string, `JWT_SECRET` to a long random secret, and `CLIENT_ORIGIN` to the site's public HTTPS origin. Set `TRUST_PROXY` to match the host's proxy topology. Set `UPLOADS_DIR` to a writable persistent volume if your host's working directory is ephemeral. Configure SMTP if your submission needs university email verification.
+
+Set `ADMIN_EMAIL` and a strong `ADMIN_PASSWORD` before running `npm run seed:admin --prefix backend` on the deployment. Run `npm start --prefix backend` to serve the frontend, API, uploads and Socket.IO from one origin. Check `/api/health` and try signing in, opening a nested page directly, and sending a message from the deployed URL.
+
+The Netlify and Vercel configurations in `frontend/` build the standalone demo. Use the full deployment above when the submission needs to demonstrate the real API and shared database.
+
+### Sharing a temporary demo link
 
 The backend can serve the built app itself, so the whole platform runs on one address:
 
@@ -183,4 +202,6 @@ How it is enforced:
 - "Active users" are based on each account's most recent activity (updated at most every five minutes), so they describe
   the current day, week and month rather than a historical range.
 - Likes are not timestamped, so "likes" counts likes on posts created within the selected range.
+- Community growth ranks active communities by recorded joins minus departures and removals during the selected UTC dates. Membership history starts when this tracking is enabled.
+- Accepted smart-match requests count connections that are currently accepted and were requested from a recommendation during the selected range.
 - Time series fill empty periods with zero so quiet days are visible.

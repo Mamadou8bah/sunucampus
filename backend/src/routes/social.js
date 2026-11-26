@@ -34,6 +34,7 @@ communitiesRouter.patch('/:id', validate(updateCommunitySchema), communities.upd
 communitiesRouter.post('/:id/join', communities.join);
 communitiesRouter.post('/:id/leave', communities.leave);
 communitiesRouter.get('/:id/members', communities.members);
+communitiesRouter.delete('/:id/members/:userId', communities.removeMember);
 communitiesRouter.post('/:id/moderators', validate(moderatorSchema), communities.addModerator);
 communitiesRouter.delete('/:id/moderators/:userId', communities.removeModerator);
 
@@ -43,6 +44,7 @@ postsRouter.get('/', validate(feedQuery, 'query'), posts.feed);
 postsRouter.post('/', validate(createPostSchema), posts.create);
 postsRouter.get('/:id', posts.getOne);
 postsRouter.delete('/:id', posts.remove);
+postsRouter.put('/:id/dismiss', posts.dismiss);
 postsRouter.patch('/:id/pin', validate(pinSchema), posts.setPinned);
 postsRouter.put('/:id/like', posts.like);
 postsRouter.delete('/:id/like', posts.unlike);

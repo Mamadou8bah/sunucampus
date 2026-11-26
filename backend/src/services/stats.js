@@ -175,10 +175,11 @@ export async function engagementStats(range) {
 
 export async function connectionStats(range) {
   const inRange = { createdAt: { $gte: range.from, $lte: range.to } };
-  const [sent, byStatus, bySource, acceptedTotal, users, series] = await Promise.all([
+  const [sent, byStatus, bySource, acceptedFromMatching, acceptedTotal, users, series] = await Promise.all([
     Connection.countDocuments(inRange),
     countBy(Connection, 'status', inRange),
     countBy(Connection, 'source', inRange),
+    Connection.countDocuments({ ...inRange, source: 'match', status: CONNECTION_STATUS.ACCEPTED }),
     Connection.countDocuments({ status: CONNECTION_STATUS.ACCEPTED }),
     User.countDocuments(),
     timeSeries(Connection, range),
@@ -199,16 +200,45 @@ export async function connectionStats(range) {
     averageConnectionsPerUser: round(users ? (acceptedTotal * 2) / users : 0, 2),
     bySource: { match: sources.match ?? 0, discover: sources.discover ?? 0, profile: sources.profile ?? 0 },
     fromMatchingRate: round(sent ? ((sources.match ?? 0) / sent) * 100 : 0),
+    acceptedFromMatching,
     series,
   };
 }
 
 export async function communityStats(range) {
   const inRange = { createdAt: { $gte: range.from, $lte: range.to } };
-  const [byStatus, byCategory, largest, mostActive, createdInRange] = await Promise.all([
+  const firstDay = range.from.toISOString().slice(0, 10);
+  const lastDay = range.to.toISOString().slice(0, 10);
+  const [byStatus, byCategory, largest, fastestGrowing, mostActive, createdInRange] = await Promise.all([
     countBy(Community, 'status'),
     countBy(Community, 'category', { status: COMMUNITY_STATUS.ACTIVE }),
     Community.find({ status: COMMUNITY_STATUS.ACTIVE }).sort({ memberCount: -1 }).limit(5),
+    Community.aggregate([
+      { $match: { status: COMMUNITY_STATUS.ACTIVE, membershipChanges: { $exists: true } } },
+      {
+        $project: {
+          _id: 0,
+          id: '$_id',
+          name: 1,
+          netMembers: {
+            $sum: {
+              $map: {
+                input: {
+                  $filter: {
+                    input: { $objectToArray: '$membershipChanges' },
+                    cond: { $and: [{ $gte: ['$$this.k', firstDay] }, { $lte: ['$$this.k', lastDay] }] },
+                  },
+                },
+                in: '$$this.v',
+              },
+            },
+          },
+        },
+      },
+      { $match: { netMembers: { $gt: 0 } } },
+      { $sort: { netMembers: -1, name: 1, id: 1 } },
+      { $limit: 5 },
+    ]),
     Post.aggregate([
       { $match: { ...inRange, community: { $ne: null } } },
       { $group: { _id: '$community', posts: { $sum: 1 } } },
@@ -228,6 +258,7 @@ export async function communityStats(range) {
     createdInRange,
     byCategory: toMap(byCategory),
     largest: largest.map((c) => ({ id: c.id, name: c.name, slug: c.slug, members: c.memberCount })),
+    fastestGrowing,
     mostActive,
   };
 }

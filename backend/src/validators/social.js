@@ -24,7 +24,10 @@ export const createPostSchema = z.object({
 export const feedQuery = z.object({
   community: objectId.optional(),
   author: objectId.optional(),
-  scope: z.enum(['foryou', 'campus']).optional(),
+  scope: z.enum(['foryou', 'friends', 'campus']).optional(),
+  rank: z.enum(['relevant', 'trending']).optional(),
+  window: z.enum(['today', 'week']).default('week'),
+  snapshot: z.uuid().optional(),
   ...page,
 });
 

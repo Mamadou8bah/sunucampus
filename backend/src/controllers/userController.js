@@ -5,12 +5,14 @@ import { rankMatches, isMatchable, scoreMatch } from '../utils/matching.js';
 import { connectedUserIds, findConnection, relatedUserIds, relationFor } from '../services/connections.js';
 import { Post, CONTENT_STATUS } from '../models/Post.js';
 import { Community, COMMUNITY_STATUS } from '../models/Community.js';
+import { rankingExclusions, recommendPeople } from '../services/peopleRanking.js';
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 /** Students and moderators who are active, excluding the viewer. Admins are staff, not discoverable. */
 const discoverableFilter = (viewer) => ({
   _id: { $ne: viewer._id },
+  discoverable: { $ne: false },
   status: ACCOUNT_STATUS.ACTIVE,
   role: { $ne: ROLES.ADMIN },
 });
@@ -61,6 +63,7 @@ export async function getUser(req, res) {
 export async function discover(req, res) {
   const { q, programme, year, interests, skills, goal, page, limit } = req.validated.query;
   const filter = discoverableFilter(req.user);
+  filter._id.$nin = await rankingExclusions(req.user);
 
   if (q) {
     const pattern = new RegExp(escapeRegex(q), 'i');
@@ -105,7 +108,8 @@ export async function matches(req, res) {
   if (me.programme) common.push({ programme: new RegExp(`^${escapeRegex(me.programme)}$`, 'i') });
 
   // Skip anyone I'm already connected to or have a pending/declined request with.
-  const exclude = [me._id, ...(await relatedUserIds(me._id))];
+  const [related, excluded] = await Promise.all([relatedUserIds(me._id), rankingExclusions(me)]);
+  const exclude = [me._id, ...related, ...excluded];
   const candidates = await User.find({ ...discoverableFilter(me), _id: { $nin: exclude }, $or: common })
     .sort({ lastActiveAt: -1 })
     .limit(CANDIDATE_POOL);
@@ -115,4 +119,8 @@ export async function matches(req, res) {
     matches: ranked.map((m) => ({ user: m.user.toPublicJSON(), score: m.score, reasons: m.reasons, shared: m.shared })),
     profileIncomplete: false,
   });
+}
+
+export async function peopleYouMayKnow(req, res) {
+  res.json({ recommendations: await recommendPeople(req.user, req.validated.query.limit) });
 }

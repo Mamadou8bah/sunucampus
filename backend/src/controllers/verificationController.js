@@ -16,6 +16,9 @@ const maskEmail = (email) => email.replace(/^(.{2})[^@]*(@.*)$/, (_m, a, b) => `
  * a different UTG address; on confirmation that address becomes their account email.
  */
 export async function requestCode(req, res) {
+  if (env.isProduction && !mailConfigured()) {
+    throw new ApiError(503, 'Email verification is temporarily unavailable. Try again later.');
+  }
   const email = (req.body.email ?? req.user.email).toLowerCase();
   if (!env.verifiedEmailDomains.includes(domainOf(email))) {
     throw ApiError.badRequest(`Use your university email address (${env.verifiedEmailDomains.map((d) => `@${d}`).join(' or ')})`);

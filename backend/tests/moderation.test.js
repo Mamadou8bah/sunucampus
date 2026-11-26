@@ -148,11 +148,14 @@ describe('admin post, comment and community moderation', () => {
 describe('GET /api/admin/overview', () => {
   it('summarises platform activity', async () => {
     const { admin } = await reportedPost();
+    await api().post('/api/communities').set(bearer(admin.token)).send({ name: 'New study group', category: 'academic' });
     const res = await api().get('/api/admin/overview').set(bearer(admin.token));
     assert.equal(res.status, 200);
     assert.equal(res.body.counts.totalUsers, 3);
     assert.equal(res.body.counts.openReports, 1);
     assert.equal(res.body.counts.postsTotal, 1);
     assert.equal(res.body.recentUsers.length, 3);
+    assert.equal(res.body.recentPosts.length, 1);
+    assert.equal(res.body.recentCommunities[0].name, 'New study group');
   });
 });

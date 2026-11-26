@@ -90,6 +90,7 @@ describe('GET /api/admin/stats', () => {
     assert.equal(s.connections.acceptanceRate, 50);
     assert.equal(s.connections.bySource.match, 1);
     assert.equal(s.connections.fromMatchingRate, 50);
+    assert.equal(s.connections.acceptedFromMatching, 1);
     assert.equal(s.connections.averageConnectionsPerUser, 0.5);
 
     assert.equal(s.messaging.messages, 1);
@@ -119,6 +120,8 @@ describe('GET /api/admin/stats', () => {
     assert.equal((await api().get('/api/admin/stats?from=2026-05-02&to=2026-05-01').set(bearer(token))).status, 400);
     assert.equal((await api().get('/api/admin/stats?from=2020-01-01&to=2026-01-01').set(bearer(token))).status, 400);
     assert.equal((await api().get('/api/admin/stats?from=yesterday').set(bearer(token))).status, 400);
+    assert.equal((await api().get('/api/admin/stats?to=2026-02-30').set(bearer(token))).status, 400);
+    assert.equal((await api().get('/api/admin/stats?from=2000-01-01').set(bearer(token))).status, 400);
   });
 
   it('returns a single section when asked', async () => {

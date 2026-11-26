@@ -17,7 +17,7 @@ const INTERACTIVE = 'a, button, input, textarea, label, dialog, [role="button"]'
  * own page with the replies; the comment icon opens it with the reply box ready.
  * `detail` renders the larger version used at the top of that page.
  */
-export default function PostCard({ post: initial, onRemoved, onChange, showCommunity = true, detail = false }) {
+export default function PostCard({ post: initial, onRemoved, onChange, showCommunity = true, detail = false, canDismiss = false }) {
   const navigate = useNavigate();
   const [post, setPost] = useState(initial);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -85,6 +85,16 @@ export default function PostCard({ post: initial, onRemoved, onChange, showCommu
     try {
       const res = await api(`/posts/${post.id}/pin`, { method: 'PATCH', body: { pinned: !post.pinned } });
       setPost(res.post);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function dismiss() {
+    setMenuOpen(false);
+    try {
+      await api(`/posts/${post.id}/dismiss`, { method: 'PUT' });
+      onRemoved?.(post);
     } catch (err) {
       setError(err.message);
     }
@@ -213,6 +223,12 @@ export default function PostCard({ post: initial, onRemoved, onChange, showCommu
               <span className="group-row-text">
                 <strong>{post.isAuthor ? 'Delete post' : 'Remove post as moderator'}</strong>
               </span>
+            </button>
+          )}
+          {canDismiss && (
+            <button type="button" className="group-row" onClick={dismiss}>
+              <span className="group-row-icon"><Icon name="close" size={20} /></span>
+              <span className="group-row-text"><strong>Hide from ranked feeds</strong></span>
             </button>
           )}
           {!post.isAuthor && (

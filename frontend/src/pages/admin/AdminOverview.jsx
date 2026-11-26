@@ -4,6 +4,7 @@ import { api } from '../../api/client.js';
 import { StatTile } from '../../components/charts/Charts.jsx';
 import { describeAction } from './auditText.js';
 import { timeAgo } from '../../lib/time.js';
+import { COMMUNITY_STATUS_LABELS } from '../../lib/communities.js';
 
 export default function AdminOverview() {
   const [data, setData] = useState(null);
@@ -57,6 +58,44 @@ export default function AdminOverview() {
       </div>
 
       <div className="two-col">
+        <section className="card">
+          <div className="section-header">
+            <h2>Recent posts</h2>
+            <Link to="/admin/posts">All posts</Link>
+          </div>
+          {data.recentPosts.length === 0 ? <p className="muted">No visible posts yet.</p> : (
+            <ul className="simple-list">
+              {data.recentPosts.map((post) => (
+                <li key={post.id}>
+                  <div>
+                    <Link to={`/post/${post.id}`}>{post.excerpt}</Link>
+                    <div className="muted">{post.author ?? 'Deleted user'}</div>
+                  </div>
+                  <time className="muted" dateTime={post.createdAt}>{timeAgo(post.createdAt)}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+        <section className="card">
+          <div className="section-header">
+            <h2>Newest communities</h2>
+            <Link to="/admin/communities">All communities</Link>
+          </div>
+          {data.recentCommunities.length === 0 ? <p className="muted">No communities yet.</p> : (
+            <ul className="simple-list">
+              {data.recentCommunities.map((community) => (
+                <li key={community.id}>
+                  <div>
+                    <Link to={`/c/${community.slug}`}>{community.name}</Link>
+                    <div className="muted">{COMMUNITY_STATUS_LABELS[community.status]}</div>
+                  </div>
+                  <time className="muted" dateTime={community.createdAt}>{timeAgo(community.createdAt)}</time>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
         <section className="card">
           <div className="section-header">
             <h2>Newest students</h2>

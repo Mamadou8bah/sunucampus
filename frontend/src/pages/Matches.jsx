@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router';
-import { api } from '../api/client.js';
+import { api, STATIC_DEMO } from '../api/client.js';
 import AppBar from '../components/AppBar.jsx';
 import Avatar from '../components/Avatar.jsx';
 import Icon from '../components/Icon.jsx';
@@ -28,12 +28,11 @@ const readPassed = () => {
 /* ----------------------------- Deck ----------------------------- */
 
 function MatchCard({ match, onSwipe, leaving }) {
-  const { user, score, reasons, shared } = match;
+  const { user, score, reasons } = match;
   const cardRef = useRef(null);
   const start = useRef(null);
   const [dx, setDx] = useState(0);
   const [returning, setReturning] = useState(false);
-  const [showAllTags, setShowAllTags] = useState(false);
 
   function onPointerDown(e) {
     if (e.target.closest('a, button')) return;
@@ -56,13 +55,6 @@ function MatchCard({ match, onSwipe, leaving }) {
     }
   }
 
-  const sharedSet = new Set([...(shared?.interests ?? []), ...(shared?.skills ?? [])]);
-  // Shared ones first; the rest stay folded away until the student asks to see them.
-  const allTags = [...new Set([...(user.interests ?? []), ...(user.skills ?? [])])].sort((a, b) => sharedSet.has(b) - sharedSet.has(a));
-  const COLLAPSED = 5;
-  const hidden = Math.max(0, allTags.length - COLLAPSED);
-  const tags = showAllTags ? allTags : allTags.slice(0, COLLAPSED);
-  const prompt = user.prompts?.[0];
   const leavingClass = leaving ? `is-leaving-${leaving === 'connect' ? 'right' : 'left'}` : '';
 
   return (
@@ -130,51 +122,6 @@ function MatchCard({ match, onSwipe, leaving }) {
           </section>
         )}
 
-        {prompt && (
-          <div className="prompt-card">
-            <p className="prompt-question">{prompt.question}</p>
-            <p className="prompt-answer">{prompt.answer}</p>
-          </div>
-        )}
-
-        {tags.length > 0 && (
-          <section>
-            <h3>Interests and skills</h3>
-            <ul className="chips" id={`tags-${user.id}`}>
-              {tags.map((t) => (
-                <li key={t} className={`chip ${sharedSet.has(t) ? 'chip-shared' : ''}`}>
-                  {t}
-                </li>
-              ))}
-              {hidden > 0 && (
-                <li>
-                  <button
-                    type="button"
-                    className="chip-toggle"
-                    aria-expanded={showAllTags}
-                    aria-controls={`tags-${user.id}`}
-                    onClick={() => setShowAllTags((v) => !v)}
-                  >
-                    {showAllTags ? 'Show less' : `+${hidden} more`}
-                  </button>
-                </li>
-              )}
-            </ul>
-          </section>
-        )}
-
-        {user.goals?.length > 0 && (
-          <section>
-            <h3>Looking for</h3>
-            <ul className="chips">
-              {user.goals.map((g) => (
-                <li key={g} className="chip chip-goal">
-                  {GOAL_LABELS[g]}
-                </li>
-              ))}
-            </ul>
-          </section>
-        )}
       </div>
     </article>
   );
@@ -536,24 +483,63 @@ function Search() {
   );
 }
 
+function RecommendedPeople() {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    let active = true;
+    api('/matches/people', { query: { limit: 30 } })
+      .then(({ recommendations }) => { if (active) setResult(recommendations); })
+      .catch((err) => { if (active) setError(err.message); });
+    return () => { active = false; };
+  }, []);
+  return (
+    <section className="screen">
+      <h2>People you may know</h2>
+      {error && <p className="field-error" role="alert">{error}</p>}
+      {!error && !result && <p className="muted">Loading recommendations…</p>}
+      {result?.length === 0 && <p className="empty">No new students to recommend yet.</p>}
+      {result?.length > 0 && (
+        <ul className="person-list">
+          {result.map(({ user, reasons }) => (
+            <li key={user.id} className="person-row">
+              <Avatar user={user} size={44} />
+              <div className="person-row-text">
+                <Link to={`/people/${user.id}`} state={{ source: 'discover' }}><UserName user={user} /></Link>
+                {(reasons[0] || academicLine(user)) && <span>{reasons[0] || academicLine(user)}</span>}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
 export default function Matches() {
+  const panelId = useId();
   const [params, setParams] = useSearchParams();
-  const tab = params.get('tab') === 'search' ? 'search' : 'foryou';
+  const requested = params.get('tab');
+  const tab = requested === 'search' || (!STATIC_DEMO && requested === 'people') ? requested : 'foryou';
 
   return (
     <>
       <AppBar large title="Matches">
         <Segmented
           label="Matches view"
+          panelId={panelId}
           value={tab}
-          onChange={(v) => setParams(v === 'search' ? { tab: 'search' } : {}, { replace: true })}
+          onChange={(v) => setParams(v === 'foryou' ? {} : { tab: v }, { replace: true })}
           options={[
             ['foryou', 'For you'],
+            ...(!STATIC_DEMO ? [['people', 'Suggested']] : []),
             ['search', 'Search'],
           ]}
         />
       </AppBar>
-      {tab === 'search' ? <Search /> : <Deck />}
+      <div role="tabpanel" id={panelId} aria-labelledby={`${panelId}-${tab}`}>
+        {tab === 'search' ? <Search /> : tab === 'people' ? <RecommendedPeople /> : <Deck />}
+      </div>
     </>
   );
 }

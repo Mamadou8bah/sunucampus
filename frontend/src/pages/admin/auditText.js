@@ -18,6 +18,10 @@ export function describeAction(log) {
   const d = log.details ?? {};
   const why = d.reason ? ` (${d.reason})` : '';
   switch (log.action) {
+    case 'user.verified':
+      return 'verified a student account';
+    case 'community.member_removed':
+      return `removed a member from ${d.name || 'a community'}`;
     case 'user.role_changed':
       return `changed a user's role from ${ROLE_LABELS[d.from]} to ${ROLE_LABELS[d.to]}`;
     case 'user.status_changed':

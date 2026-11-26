@@ -1,4 +1,5 @@
 import { warnUser } from './adminModerationController.js';
+import mongoose from 'mongoose';
 import { User } from '../models/User.js';
 import { AuditLog } from '../models/AuditLog.js';
 import { ROLES, ACCOUNT_STATUS } from '../config/roles.js';
@@ -32,6 +33,24 @@ export async function getUser(req, res) {
   const user = await User.findById(req.params.id);
   if (!user) throw ApiError.notFound('User not found');
   res.json({ user });
+}
+
+export async function verifyStudent(req, res) {
+  const { id } = req.params;
+  if (!mongoose.isObjectIdOrHexString(id)) throw ApiError.notFound('User not found');
+  const user = await User.findOneAndUpdate(
+    { _id: id, role: { $ne: ROLES.ADMIN }, emailVerifiedAt: null },
+    { $set: { emailVerifiedAt: new Date() }, $unset: { emailVerification: 1 } },
+    { returnDocument: 'after' },
+  );
+  if (user) {
+    await recordAudit(req.user, 'user.verified', 'User', user._id);
+    return res.json({ user });
+  }
+  const existing = await User.findById(id);
+  if (!existing) throw ApiError.notFound('User not found');
+  if (existing.role === ROLES.ADMIN) throw ApiError.badRequest('Only student accounts can be verified here');
+  res.json({ user: existing });
 }
 
 /** Stops an admin from locking themselves out or removing the last active admin. */

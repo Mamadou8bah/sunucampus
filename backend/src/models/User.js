@@ -19,6 +19,8 @@ const userSchema = new mongoose.Schema(
     yearOfStudy: { type: Number, min: 1, max: 7 },
     bio: { type: String, trim: true, maxlength: 500 },
     interests: { type: [String], default: [] },
+    discoverable: { type: Boolean, default: true },
+    rankingExcludedUsers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     skills: { type: [String], default: [] },
     goals: { type: [String], enum: CONNECTION_GOALS, default: [] },
     avatarUrl: { type: String, trim: true },
@@ -85,6 +87,9 @@ userSchema.index({ interests: 1 });
 userSchema.index({ skills: 1 });
 userSchema.index({ goals: 1 });
 userSchema.index({ programme: 1, yearOfStudy: 1 });
+userSchema.index({ rankingExcludedUsers: 1 });
+userSchema.index({ status: 1, lastActiveAt: -1, _id: 1 });
+userSchema.index({ yearOfStudy: 1, status: 1, lastActiveAt: -1 });
 
 userSchema.set('toJSON', {
   transform: (_doc, ret) => {

@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { NavLink, Outlet } from 'react-router';
 import AppBar from '../../components/AppBar.jsx';
 
@@ -23,7 +24,9 @@ export default function AdminLayout() {
         ))}
       </nav>
       <main className="admin-content">
-        <Outlet />
+        <Suspense fallback={<p className="muted" role="status">Loading admin section…</p>}>
+          <Outlet />
+        </Suspense>
       </main>
     </>
   );

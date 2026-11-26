@@ -347,6 +347,8 @@ export async function overview(_req, res) {
     activeCommunities,
     openReports,
     recentUsers,
+    recentPosts,
+    recentCommunities,
     recentActions,
   ] = await Promise.all([
     User.countDocuments(),
@@ -359,12 +361,16 @@ export async function overview(_req, res) {
     Community.countDocuments({ status: COMMUNITY_STATUS.ACTIVE }),
     Report.countDocuments({ status: REPORT_STATUS.OPEN }),
     User.find().sort({ createdAt: -1 }).limit(5),
+    Post.find({ status: CONTENT_STATUS.VISIBLE }).select('content author createdAt').sort({ createdAt: -1 }).limit(5).populate('author', 'name'),
+    Community.find().select('name slug status createdAt').sort({ createdAt: -1 }).limit(5),
     AuditLog.find().sort({ createdAt: -1 }).limit(6).populate('actor', 'name'),
   ]);
 
   res.json({
     counts: { totalUsers, newUsersWeek, activeWeek, suspended, postsTotal, postsDay, pendingCommunities, activeCommunities, openReports },
     recentUsers: recentUsers.map((u) => ({ id: u.id, name: u.name, email: u.email, programme: u.programme, createdAt: u.createdAt })),
+    recentPosts: recentPosts.map((p) => ({ id: p.id, excerpt: p.content.slice(0, 120), author: p.author?.name, createdAt: p.createdAt })),
+    recentCommunities: recentCommunities.map((c) => ({ id: c.id, name: c.name, slug: c.slug, status: c.status, createdAt: c.createdAt })),
     recentActions,
   });
 }

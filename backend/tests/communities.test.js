@@ -91,6 +91,33 @@ describe('membership', () => {
 });
 
 describe('community moderation', () => {
+  it('allows local moderators to remove ordinary members once and tracks net growth', async () => {
+    const owner = await createUser();
+    const student = await createUser();
+    const other = await createUser();
+    const admin = await createUser({ role: 'admin' });
+    const community = await activeCommunity(owner.token);
+    const path = `/api/communities/${community.id}`;
+    for (const member of [student, other]) {
+      assert.equal((await api().post(`${path}/join`).set(bearer(member.token))).status, 200);
+    }
+    const removePath = `${path}/members/${student.user.id}`;
+    assert.equal((await api().delete(removePath).set(bearer(other.token))).status, 403);
+    assert.equal((await api().delete(`${path}/members/${owner.user.id}`).set(bearer(admin.token))).status, 400);
+    for (const res of await Promise.all([1, 2].map(() => api().delete(removePath).set(bearer(owner.token))))) {
+      assert.equal(res.status, 200);
+      assert.equal(res.body.community.memberCount, 2);
+    }
+    const members = await api().get(`${path}/members`).set(bearer(owner.token));
+    assert.ok(!members.body.members.some((member) => member.id === student.user.id));
+
+    const report = await api().get('/api/admin/stats?section=communities').set(bearer(admin.token));
+    assert.equal(report.status, 200);
+    assert.deepEqual(report.body.communities.fastestGrowing, [{ id: community.id, name: community.name, netMembers: 1 }]);
+    const old = await api().get('/api/admin/stats?section=communities&from=2020-01-01&to=2020-01-02').set(bearer(admin.token));
+    assert.deepEqual(old.body.communities.fastestGrowing, []);
+  });
+
   it('lets moderators edit details and appoint members as moderators', async () => {
     const owner = await createUser();
     const student = await createUser();

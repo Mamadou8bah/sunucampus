@@ -5,6 +5,11 @@ import { canModerateCommunity, canPostInCommunity, isAdmin } from '../services/p
 import { loadCommunity } from './communityController.js';
 import { connectedUserIds } from '../services/connections.js';
 import { notify } from '../services/notifications.js';
+import { FeedDismissal } from '../models/FeedDismissal.js';
+import { buildFeed, buildTrending, eligiblePosts, rankingVisibility } from '../services/feedRanking.js';
+import { randomUUID } from 'node:crypto';
+import { User } from '../models/User.js';
+import { ACCOUNT_STATUS } from '../config/roles.js';
 
 const AUTHOR_FIELDS = 'name avatarUrl programme yearOfStudy role emailVerifiedAt';
 const COMMUNITY_FIELDS = 'name slug moderators status';
@@ -58,6 +63,60 @@ const assertNotArchived = (post) => {
 };
 
 const pageInfo = (page, limit, total) => ({ page, limit, total, totalPages: Math.ceil(total / limit) || 1 });
+const snapshots = new Map();
+const expiryMs = 15 * 60_000;
+
+async function rankedFeed(req, res) {
+  const { rank, window, snapshot, page, limit } = req.validated.query;
+  const viewer = req.user;
+  const key = [viewer.id, rank, window].join(':');
+  const now = Date.now();
+  const visibility = await rankingVisibility(viewer);
+  let id = snapshot;
+  let state = snapshots.get(id);
+  if (snapshot && (!state || state.key !== key || state.expires <= now)) {
+    throw ApiError.conflict('This feed has expired. Refresh to reload it.');
+  }
+  if (!state) {
+    const result = rank === 'trending' ? await buildTrending(viewer, visibility, now, window) : await buildFeed(viewer, visibility, now);
+    id = randomUUID();
+    state = { ...result, key, expires: now + expiryMs };
+    if (snapshots.size >= 500) snapshots.delete(snapshots.keys().next().value);
+    snapshots.set(id, state);
+  }
+
+  const ids = state.ids.slice((page - 1) * limit, page * limit);
+  const highlights = page === 1 ? state.highlights : [];
+  const selected = [...new Set([...ids, ...highlights.map((row) => row.id)])];
+  // Keep original slots stable but recheck visibility and preferences on every page.
+  const candidates = await Post.find({ ...visibility.filter, _id: { $in: selected } });
+  const { posts } = await eligiblePosts(viewer, candidates);
+  const pageIds = new Set(ids);
+  const pagePosts = posts.filter((post) => pageIds.has(post.id));
+  const evaluation = {
+    served: pagePosts.length,
+    uniqueAuthors: new Set(pagePosts.map((post) => String(post.author))).size,
+    discovery: pagePosts.filter((post) => state.discoveryIds?.has(post.id)).length,
+  };
+  await Post.populate(posts, POPULATE);
+  const mapped = new Map(posts.map((post) => [post.id, serializePost(post, viewer)]));
+  res.json({
+    posts: ids.map((post) => mapped.get(post)).filter(Boolean),
+    highlights: highlights.filter((row) => mapped.has(row.id)).map((row) => ({ post: mapped.get(row.id), reason: row.reason })),
+    snapshot: id,
+    evaluation,
+    ...pageInfo(page, limit, state.ids.length),
+  });
+}
+
+export async function dismiss(req, res) {
+  const post = await loadPost(req.params.id, req.user);
+  const filter = { viewer: req.user._id, post: post._id };
+  await FeedDismissal.updateOne(filter, { $setOnInsert: filter }, { upsert: true }).catch((error) => {
+    if (error.code !== 11000) throw error;
+  });
+  res.status(204).end();
+}
 
 export async function create(req, res) {
   const { content, community: communityId } = req.body;
@@ -74,6 +133,7 @@ export async function create(req, res) {
 
 export async function feed(req, res) {
   const { community: communityId, author, scope, page, limit } = req.validated.query;
+  if (req.validated.query.rank && scope !== 'friends' && !communityId && !author) return rankedFeed(req, res);
   const me = req.user;
   const filter = { status: CONTENT_STATUS.VISIBLE };
   let sort = { createdAt: -1, _id: -1 };
@@ -87,6 +147,14 @@ export async function feed(req, res) {
     // A student's profile: campus-wide posts and posts in publicly readable communities.
     const readable = await Community.find({ status: { $in: READABLE_COMMUNITY } }).distinct('_id');
     filter.$or = [{ community: null }, { community: { $in: readable } }];
+  } else if (scope === 'friends') {
+    const [{ filter: allowed }, connections] = await Promise.all([rankingVisibility(me), connectedUserIds(me._id)]);
+    const authors = await User.distinct('_id', {
+      _id: { $in: [me._id, ...connections], $nin: allowed.author.$nin },
+      status: ACCOUNT_STATUS.ACTIVE,
+    });
+    filter.author = { $in: authors };
+    filter.$or = allowed.$or;
   } else if (scope === 'foryou') {
     // "For you": posts from my connections and me, plus posts in my communities.
     const [mine, people] = await Promise.all([
@@ -141,9 +209,10 @@ export async function like(req, res) {
   const post = await loadPost(req.params.id, req.user);
   assertNotArchived(post);
   // Atomic and idempotent: a student can only like a post once.
+  const now = new Date();
   const { modifiedCount } = await Post.updateOne(
     { _id: post._id, likes: { $ne: req.user._id } },
-    { $push: { likes: req.user._id }, $inc: { likeCount: 1 } },
+    { $push: { likes: req.user._id }, $inc: { likeCount: 1 }, $set: { [`likeTimes.${req.user.id}`]: now }, $max: { lastLikedAt: now } },
   );
   if (modifiedCount) await notify({ recipient: post.author?._id, actor: req.user._id, type: 'like', post: post._id });
   const { likeCount } = await Post.findById(post._id, 'likeCount');
@@ -152,7 +221,9 @@ export async function like(req, res) {
 
 export async function unlike(req, res) {
   const post = await loadPost(req.params.id, req.user);
-  await Post.updateOne({ _id: post._id, likes: req.user._id }, { $pull: { likes: req.user._id }, $inc: { likeCount: -1 } });
+  await Post.updateOne({ _id: post._id, likes: req.user._id }, {
+    $pull: { likes: req.user._id }, $inc: { likeCount: -1 }, $unset: { [`likeTimes.${req.user.id}`]: 1 },
+  });
   const { likeCount } = await Post.findById(post._id, 'likeCount');
   res.json({ likeCount, likedByMe: false });
 }

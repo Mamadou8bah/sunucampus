@@ -17,7 +17,7 @@ import {
   communityStatusSchema,
 } from '../validators/moderation.js';
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+const isoDate = z.iso.date({ error: 'Use a valid date in YYYY-MM-DD format' });
 const statsQuery = z
   .object({
     from: isoDate.optional(),
@@ -25,8 +25,8 @@ const statsQuery = z
     interval: z.enum(['day', 'week', 'month']).optional(),
     section: z.enum(['all', ...Object.keys(SECTIONS)]).optional(),
   })
-  .refine((q) => !q.from || !q.to || q.from <= q.to, { message: '"From" must be before "to"', path: ['from'] })
-  .refine((q) => !q.from || !q.to || (new Date(q.to) - new Date(q.from)) / 86_400_000 <= 731, {
+  .refine((q) => !q.from || new Date(q.from) <= (q.to ? new Date(q.to) : new Date()), { message: '"From" must be before "to"', path: ['from'] })
+  .refine((q) => !q.from || ((q.to ? new Date(q.to) : new Date()) - new Date(q.from)) / 86_400_000 <= 731, {
     message: 'Choose a range of two years or less',
     path: ['from'],
   });
@@ -43,6 +43,7 @@ router.get('/users/:id', users.getUser);
 router.patch('/users/:id/role', validate(updateRoleSchema), users.updateRole);
 router.patch('/users/:id/status', validate(updateStatusSchema), users.updateStatus);
 router.post('/users/:id/warn', validate(warnSchema), users.warn);
+router.post('/users/:id/verify', users.verifyStudent);
 
 router.get('/reports', validate(reportsQuery, 'query'), moderation.listReports);
 router.patch('/reports/:id', validate(resolveReportSchema), moderation.resolveReport);

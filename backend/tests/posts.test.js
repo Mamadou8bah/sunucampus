@@ -51,6 +51,14 @@ describe('campus feed', () => {
 
     await api().post(`/api/communities/${community.id}/join`).set(bearer(me.token));
     assert.deepEqual(await contents('foryou'), ['From a friend', 'In a community I am not in']);
+
+    await api().post('/api/connections').set(bearer(me.token)).send({ recipientId: stranger.user.id });
+    await post(me.token, { content: 'My newer post' });
+    const privateCommunity = await api().post('/api/communities').set(bearer(friend.token)).send({ name: 'Pending group', category: 'academic' });
+    await Post.create({ author: friend.user.id, community: privateCommunity.body.community.id, content: 'Private post' });
+    const friends = await feed(me.token, { scope: 'friends' });
+    assert.equal(friends.status, 200);
+    assert.deepEqual(friends.body.posts.map((p) => p.content), ['My newer post', 'From a friend']);
   });
 
   it('validates content', async () => {

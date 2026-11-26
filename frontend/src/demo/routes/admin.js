@@ -87,7 +87,7 @@ const adminCommunitiesQuery = z.object({
 const communityStatusSchema = z.object({ status: z.enum(Object.values(COMMUNITY_STATUS)), reason: reasonField });
 
 const SECTION_NAMES = ['users', 'engagement', 'connections', 'communities', 'messaging', 'moderation', 'marketplace', 'popular'];
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Use YYYY-MM-DD');
+const isoDate = z.iso.date({ error: 'Use a valid date in YYYY-MM-DD format' });
 const statsQuery = z
   .object({
     from: isoDate.optional(),
@@ -95,8 +95,8 @@ const statsQuery = z
     interval: z.enum(['day', 'week', 'month']).optional(),
     section: z.enum(['all', ...SECTION_NAMES]).optional(),
   })
-  .refine((q) => !q.from || !q.to || q.from <= q.to, { message: '"From" must be before "to"', path: ['from'] })
-  .refine((q) => !q.from || !q.to || (new Date(q.to) - new Date(q.from)) / 86_400_000 <= 731, {
+  .refine((q) => !q.from || new Date(q.from) <= (q.to ? new Date(q.to) : new Date()), { message: '"From" must be before "to"', path: ['from'] })
+  .refine((q) => !q.from || ((q.to ? new Date(q.to) : new Date()) - new Date(q.from)) / 86_400_000 <= 731, {
     message: 'Choose a range of two years or less',
     path: ['from'],
   });
@@ -127,7 +127,7 @@ const populatedUser = (id, fields) => {
 
 const reportJSON = (r) => cleanJSON(r);
 const communityJSON = (c) => {
-  const { members: _members, ...rest } = cleanJSON(c);
+  const { members: _members, membershipChanges: _changes, ...rest } = cleanJSON(c);
   return rest;
 };
 const auditJSON = (log, actorFields) => {
@@ -153,6 +153,18 @@ function listUsers(ctx) {
 function getUser({ params }) {
   const user = byId('users', params.id);
   if (!user) throw notFound('User not found');
+  return { user: userJSON(user) };
+}
+
+function verifyStudent({ me, params }) {
+  const user = byId('users', params.id);
+  if (!user) throw notFound('User not found');
+  if (user.role === ROLES.ADMIN) throw badRequest('Only student accounts can be verified here');
+  if (!user.emailVerifiedAt) {
+    update(user, { emailVerifiedAt: nowISO() });
+    if (db.emailVerifications) delete db.emailVerifications[user._id];
+    recordAudit(me, 'user.verified', 'User', user._id);
+  }
   return { user: userJSON(user) };
 }
 
@@ -512,7 +524,13 @@ function overview() {
     .slice(0, 5)
     .map((u) => ({ id: u._id, name: u.name, email: u.email, programme: u.programme, createdAt: u.createdAt }));
   const recentActions = [...db.auditlogs].sort(newestFirst).slice(0, 6).map((l) => auditJSON(l, 'name'));
-  return { counts, recentUsers, recentActions };
+  const recentPosts = db.posts.filter((p) => p.status === CONTENT_STATUS.VISIBLE).sort(newestFirst).slice(0, 5).map((p) => ({
+    id: p._id, excerpt: p.content.slice(0, 120), author: byId('users', p.author)?.name, createdAt: p.createdAt,
+  }));
+  const recentCommunities = [...db.communities].sort(newestFirst).slice(0, 5).map((c) => ({
+    id: c._id, name: c.name, slug: c.slug, status: c.status, createdAt: c.createdAt,
+  }));
+  return { counts, recentUsers, recentActions, recentPosts, recentCommunities };
 }
 
 /* ------------------------------ Statistics (services/stats.js) ------------------------------ */
@@ -674,6 +692,7 @@ function connectionStats(range) {
     averageConnectionsPerUser: round(users ? (acceptedTotal * 2) / users : 0, 2),
     bySource: { match: sources.match ?? 0, discover: sources.discover ?? 0, profile: sources.profile ?? 0 },
     fromMatchingRate: round(sent ? ((sources.match ?? 0) / sent) * 100 : 0),
+    acceptedFromMatching: inRange.filter((c) => c.source === 'match' && c.status === CONNECTION_STATUS.ACCEPTED).length,
     series: timeSeries(db.connections, range),
   };
 }
@@ -682,6 +701,17 @@ function communityStats(range) {
   const status = toMap(countBy(db.communities, 'status'));
   const active = db.communities.filter((c) => c.status === COMMUNITY_STATUS.ACTIVE);
   const largest = [...active].sort((a, b) => (b.memberCount ?? 0) - (a.memberCount ?? 0)).slice(0, 5);
+  const firstDay = range.from.toISOString().slice(0, 10);
+  const lastDay = range.to.toISOString().slice(0, 10);
+  const fastestGrowing = active.map((c) => ({
+    id: c._id,
+    name: c.name,
+    netMembers: Object.entries(c.membershipChanges ?? {})
+      .filter(([day]) => day >= firstDay && day <= lastDay)
+      .reduce((total, [, change]) => total + change, 0),
+  })).filter((c) => c.netMembers > 0)
+    .sort((a, b) => b.netMembers - a.netMembers || a.name.localeCompare(b.name) || a.id.localeCompare(b.id))
+    .slice(0, 5);
   const mostActive = countBy(db.posts.filter((p) => inRangeOf(range)(p) && p.community != null), 'community')
     .slice(0, 5)
     .map((r) => ({ posts: r.count, community: byId('communities', r._id), id: String(r._id) }))
@@ -694,6 +724,7 @@ function communityStats(range) {
     createdInRange: db.communities.filter(inRangeOf(range)).length,
     byCategory: toMap(countBy(active, 'category')),
     largest: largest.map((c) => ({ id: c._id, name: c.name, slug: c.slug, members: c.memberCount })),
+    fastestGrowing,
     mostActive,
   };
 }
@@ -827,6 +858,7 @@ function reportTables(report) {
       ['Acceptance rate (%)', c.acceptanceRate],
       ['Average connections per user', c.averageConnectionsPerUser],
       ['Requests from smart matching (%)', c.fromMatchingRate],
+      ['Accepted smart-match requests', c.acceptedFromMatching],
     ]);
     add('Connections: by source', ['Source', 'Requests'], mapRows(c.bySource));
     add('Connections: requests over time', ['Period starting', 'Requests'], c.series.map((r) => [r.date, r.count]));
@@ -835,6 +867,7 @@ function reportTables(report) {
     add('Communities: by status', ['Status', 'Communities'], mapRows(cm.byStatus));
     add('Communities: active by category', ['Category', 'Communities'], mapRows(cm.byCategory));
     add('Communities: largest', ['Community', 'Members'], cm.largest.map((r) => [r.name, r.members]));
+    add('Communities: fastest growing in range', ['Community', 'Net members'], cm.fastestGrowing.map((r) => [r.name, r.netMembers]));
     add('Communities: most active in range', ['Community', 'Posts'], cm.mostActive.map((r) => [r.name, r.posts]));
   }
   if (m) {
@@ -923,6 +956,7 @@ register([
   ['PATCH', '/admin/users/:id/role', updateRole, admin],
   ['PATCH', '/admin/users/:id/status', updateStatus, admin],
   ['POST', '/admin/users/:id/warn', warn, admin],
+  ['POST', '/admin/users/:id/verify', verifyStudent, admin],
 
   ['GET', '/admin/reports', listReports, admin],
   ['PATCH', '/admin/reports/:id', resolveReport, admin],

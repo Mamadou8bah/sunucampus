@@ -1,4 +1,4 @@
-/** Blue tick for students who confirmed a UTG email address. */
+/** Blue tick for verified UTG students. */
 export function VerifiedBadge({ size = 18 }) {
   return (
     <svg className="verified-badge" width={size} height={size} viewBox="0 0 24 24" role="img" aria-label="Verified UTG student">

@@ -1,8 +1,9 @@
 import mongoose from 'mongoose';
-import { Community, COMMUNITY_STATUS, slugify } from '../models/Community.js';
+import { Community, COMMUNITY_STATUS, membershipDay, slugify } from '../models/Community.js';
 import { User } from '../models/User.js';
 import { ROLES } from '../config/roles.js';
 import { ApiError } from '../utils/ApiError.js';
+import { recordAudit } from '../utils/audit.js';
 import { canModerateCommunity, canViewCommunity, isAdmin } from '../services/permissions.js';
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -109,26 +110,30 @@ export async function join(req, res) {
 
   // Atomic: only adds and counts the member once.
   const updated = await Community.findOneAndUpdate(
-    { _id: community._id, members: { $ne: req.user._id } },
-    { $push: { members: req.user._id }, $inc: { memberCount: 1 } },
+    { _id: community._id, status: COMMUNITY_STATUS.ACTIVE, members: { $ne: req.user._id } },
+    { $push: { members: req.user._id }, $inc: { memberCount: 1, [`membershipChanges.${membershipDay()}`]: 1 } },
     { returnDocument: 'after' },
   );
-  res.json({ community: serializeCommunity(updated ?? community, req.user) });
+  const current = updated ?? await loadCommunity(req.params.id, req.user);
+  if (current.status !== COMMUNITY_STATUS.ACTIVE) throw ApiError.badRequest('This community is not open for new members');
+  res.json({ community: serializeCommunity(current, req.user) });
 }
 
 export async function leave(req, res) {
   const community = await loadCommunity(req.params.id, req.user);
   const me = req.user._id;
-  if (community.isModerator(me) && community.moderators.length === 1 && community.memberCount > 1) {
-    throw ApiError.badRequest('Appoint another moderator before leaving this community');
-  }
-
   const updated = await Community.findOneAndUpdate(
-    { _id: community._id, members: me },
-    { $pull: { members: me, moderators: me }, $inc: { memberCount: -1 } },
+    {
+      _id: community._id,
+      members: me,
+      $or: [{ moderators: { $ne: me } }, { 'moderators.1': { $exists: true } }, { memberCount: { $lte: 1 } }],
+    },
+    { $pull: { members: me, moderators: me }, $inc: { memberCount: -1, [`membershipChanges.${membershipDay()}`]: -1 } },
     { returnDocument: 'after' },
   );
-  res.json({ community: serializeCommunity(updated ?? community, req.user) });
+  const current = updated ?? await loadCommunity(req.params.id, req.user);
+  if (!updated && current.isMember(me)) throw ApiError.badRequest('Appoint another moderator before leaving this community');
+  res.json({ community: serializeCommunity(current, req.user) });
 }
 
 export async function members(req, res) {
@@ -148,27 +153,62 @@ export async function members(req, res) {
   });
 }
 
+export async function removeMember(req, res) {
+  const community = await loadModeratable(req);
+  const { userId } = req.params;
+  if (!mongoose.isObjectIdOrHexString(userId)) throw ApiError.badRequest('Invalid member id');
+  const admin = isAdmin(req.user);
+  const updated = await Community.findOneAndUpdate(
+    {
+      _id: community._id,
+      members: userId,
+      moderators: admin ? { $ne: userId } : { $eq: req.user._id, $ne: userId },
+    },
+    { $pull: { members: userId }, $inc: { memberCount: -1, [`membershipChanges.${membershipDay()}`]: -1 } },
+    { returnDocument: 'after' },
+  );
+  if (!updated) {
+    const current = await loadModeratable(req);
+    if (current.isModerator(userId)) throw ApiError.badRequest('Remove their moderator role first');
+    return res.json({ community: serializeCommunity(current, req.user) });
+  }
+  if (admin) await recordAudit(req.user, 'community.member_removed', 'Community', community._id, { userId, name: community.name });
+  res.json({ community: serializeCommunity(updated, req.user) });
+}
+
 export async function addModerator(req, res) {
   const community = await loadModeratable(req);
   const { userId } = req.body;
-  if (!community.isMember(userId)) throw ApiError.badRequest('Only members can be appointed as moderators');
-
-  if (!community.isModerator(userId)) {
-    community.moderators.push(userId);
-    await community.save();
-    // Appointed students gain the platform-wide moderator role (docs/PROPOSAL.md §4.2).
-    await User.updateOne({ _id: userId, role: ROLES.STUDENT }, { role: ROLES.MODERATOR });
+  const updated = await Community.findOneAndUpdate(
+    { _id: community._id, members: userId, ...(isAdmin(req.user) ? {} : { moderators: req.user._id }) },
+    { $addToSet: { moderators: userId } },
+    { returnDocument: 'after' },
+  );
+  if (!updated) {
+    await loadModeratable(req);
+    throw ApiError.badRequest('Only members can be appointed as moderators');
   }
-  res.json({ community: serializeCommunity(community, req.user) });
+  // Appointed students gain the platform-wide moderator role (docs/PROPOSAL.md §4.2).
+  await User.updateOne({ _id: userId, role: ROLES.STUDENT }, { role: ROLES.MODERATOR });
+  res.json({ community: serializeCommunity(updated, req.user) });
 }
 
 export async function removeModerator(req, res) {
   const community = await loadModeratable(req);
   const { userId } = req.params;
-  if (community.moderators.length === 1 && community.isModerator(userId)) {
+  if (!mongoose.isObjectIdOrHexString(userId)) throw ApiError.badRequest('Invalid moderator id');
+  const updated = await Community.findOneAndUpdate(
+    {
+      _id: community._id,
+      moderators: isAdmin(req.user) ? userId : { $all: [req.user._id, userId] },
+      'moderators.1': { $exists: true },
+    },
+    { $pull: { moderators: userId } },
+    { returnDocument: 'after' },
+  );
+  const current = updated ?? await loadModeratable(req);
+  if (!updated && current.isModerator(userId)) {
     throw ApiError.badRequest('A community needs at least one moderator');
   }
-  community.moderators = community.moderators.filter((m) => !m.equals(userId));
-  await community.save();
-  res.json({ community: serializeCommunity(community, req.user) });
+  res.json({ community: serializeCommunity(current, req.user) });
 }

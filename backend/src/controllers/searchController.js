@@ -5,6 +5,7 @@ import { ROLES, ACCOUNT_STATUS } from '../config/roles.js';
 import { isMatchable, scoreMatch } from '../utils/matching.js';
 import { serializeCommunity } from './communityController.js';
 import { POPULATE, READABLE_COMMUNITY, serializePost } from './postController.js';
+import { rankingExclusions } from '../services/peopleRanking.js';
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
@@ -21,15 +22,16 @@ export async function search(req, res) {
 
   const [people, communities, posts] = await Promise.all([
     want('people')
-      ? User.find({
-          _id: { $ne: me._id },
+      ? rankingExclusions(me).then((exclude) => User.find({
+          _id: { $nin: [me._id, ...exclude] },
+          discoverable: { $ne: false },
           status: ACCOUNT_STATUS.ACTIVE,
           role: { $ne: ROLES.ADMIN },
           $or: [{ name: pattern }, { programme: pattern }, { interests: pattern }, { skills: pattern }],
         })
           // Verified and recently active first; names starting with the query are moved up below.
           .sort({ emailVerifiedAt: -1, lastActiveAt: -1 })
-          .limit(each * 3)
+          .limit(each * 3))
       : [],
     want('communities')
       ? Community.find({ status: COMMUNITY_STATUS.ACTIVE, $or: [{ name: pattern }, { description: pattern }, { category: pattern }] })

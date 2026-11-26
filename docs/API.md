@@ -44,6 +44,7 @@ Paginated lists accept `page` and `limit` and return `{ page, limit, total, tota
 | GET | `/users` | User | `q, programme, year, interests, skills, goal, page, limit` | `interests`/`skills` are comma-separated (all must match). Includes `matchScore` when the viewer's profile is complete. |
 | GET | `/users/:id` | User | | Public profile, plus `match { score, reasons }` and `relation { status, connectionId }`. |
 | GET | `/matches` | User | `limit` | `{ matches: [{ user, score, reasons, shared }], profileIncomplete }`. See [MATCHING.md](MATCHING.md). |
+| GET | `/matches/people` | User | `limit` | `{ recommendations: [{ user, score, reasons }] }`. Graph and profile recommendations, including for new accounts. |
 | GET | `/meta/options` | User | | Suggested programmes, interests, skills and the goal list. |
 
 `relation.status` is one of `none`, `connected`, `pending_outgoing`, `pending_incoming`, or `declined` (shown only to
@@ -64,17 +65,25 @@ the student whose request was declined, for 30 days).
 | Method | Endpoint | Access | Body / query | Notes |
 |---|---|---|---|---|
 | GET | `/posts` | User | `community, author, page, limit` | With no filter: the campus feed (campus-wide posts plus your communities' posts). |
+| GET | `/posts` | User | `scope=friends, page, limit` | Newest visible posts from the viewer and their active accepted connections. |
+| GET | `/posts` | User | `rank=relevant` or `rank=trending`, `window=today\|week`, `snapshot?, page, limit` | Ranked public feed. Reuse the response's viewer-specific `snapshot` and page size for later pages. A stale or incompatible snapshot returns 409. |
 | POST | `/posts` | User | `content, community?` | Posting in a community requires membership. |
 | GET | `/posts/:id` | User | | |
 | DELETE | `/posts/:id` | Author, community moderator, admin | | Soft delete |
 | PATCH | `/posts/:id/pin` | Community moderator, admin | `pinned` | Community posts only |
 | PUT | `/posts/:id/like` | User | | Idempotent |
 | DELETE | `/posts/:id/like` | User | | Idempotent |
+| PUT | `/posts/:id/dismiss` | User | | Hides the post from both ranked modes for the signed-in user. Returns 204. |
 | GET | `/posts/:id/comments` | User | | |
 | POST | `/posts/:id/comments` | User | `content` | |
 | DELETE | `/posts/:id/comments/:commentId` | Author, community moderator, admin | | |
 
 Each post includes `likedByMe`, `isAuthor`, `canDelete` and `canPin` for the current user.
+
+Ranked responses include first-page `highlights` and per-page `evaluation` counts (`served`, `uniqueAuthors`, `discovery`).
+Ordinary feed requests, profile posts and community posts retain their original chronological or pinned ordering.
+
+The profile update accepts `discoverable` and `rankingExcludedUsers` (up to 200 user IDs). Turning discovery off removes the account from people search, graph suggestions and goal-based matches. Exclusions apply in either direction to those surfaces and the ranked feeds. Direct profiles, messaging and connection permissions use their existing rules.
 
 ## Communities
 
@@ -87,6 +96,7 @@ Each post includes `likedByMe`, `isAuthor`, `canDelete` and `canPin` for the cur
 | POST | `/communities/:id/join` | User | | Active communities only |
 | POST | `/communities/:id/leave` | Member | | The only moderator must appoint another one first |
 | GET | `/communities/:id/members` | User | | |
+| DELETE | `/communities/:id/members/:userId` | Community moderator, admin | | Removes a member and updates the count. Demote a moderator before removing them. Removed members can rejoin active communities. |
 | POST | `/communities/:id/moderators` | Community moderator, admin | `userId` | The new moderator must be a member |
 | DELETE | `/communities/:id/moderators/:userId` | Community moderator, admin | | At least one moderator must remain |
 
@@ -157,9 +167,10 @@ and `text` say what and why) and `warning` (an admin's warning in `text`). You a
 
 | Method | Endpoint | Body / query | Notes |
 |---|---|---|---|
-| GET | `/admin/overview` | | Headline counts, newest users, recent admin actions |
+| GET | `/admin/overview` | | Headline counts, newest users, recent visible posts, newest communities, recent admin actions |
 | GET | `/admin/users` | `q, role, status, page, limit` | |
 | GET | `/admin/users/:id` | | |
+| POST | `/admin/users/:id/verify` | | Manually verifies a student account and records the action in the audit log. |
 | PATCH | `/admin/users/:id/role` | `role` | You can't remove your own admin role, or the last admin's |
 | PATCH | `/admin/users/:id/status` | `status, reason?` | `active, suspended, banned`. Disconnects the user's live sessions. |
 | POST | `/admin/users/:id/warn` | `message, targetType?, targetId?` | Formal warning: counted on the account (`warningCount`), recorded in the audit log and sent to the student as a notification. Admins can't be warned. |
@@ -184,8 +195,8 @@ and `text` say what and why) and `warning` (an admin's warning in `text`). You a
 |---|---|
 | `users` | total, new in range, active in the last day/week/month, profile completion rate, by role, status, programme and year, registrations over time |
 | `engagement` | posts, comments, likes, students posting, posts and comments over time, top posts, most active students |
-| `connections` | requests sent, accepted, rejected, pending, acceptance rate, average connections per student, requests by source, share from smart matching, requests over time |
-| `communities` | totals by status and category, created in range, largest, most active by posts |
+| `connections` | requests sent, accepted, rejected, pending, acceptance rate, average connections per student, requests by source, share and accepted count from smart matching, requests over time |
+| `communities` | totals by status and category, created in range, largest, fastest-growing by recorded net membership gains, most active by posts |
 | `messaging` | message count, active conversations, students messaging, average per conversation, messages over time (counts only) |
 | `moderation` | reports received, resolved, dismissed, open, average hours to resolve, by reason, content type and action, posts moderated, suspended and banned accounts, reports over time |
 | `popular` | top interests, skills and connection goals |
